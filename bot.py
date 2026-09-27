@@ -28,8 +28,8 @@ DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "downloads"))
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "49"))
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 MAX_CONCURRENT_DOWNLOADS = max(1, int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "2")))
-MAX_LINKS_PER_MESSAGE = max(1, int(os.getenv("MAX_LINKS_PER_MESSAGE", "5")))
-MAX_QUEUE_PER_USER = max(1, int(os.getenv("MAX_QUEUE_PER_USER", "10")))
+MAX_LINKS_PER_MESSAGE = max(0, int(os.getenv("MAX_LINKS_PER_MESSAGE", "0")))
+MAX_QUEUE_PER_USER = max(0, int(os.getenv("MAX_QUEUE_PER_USER", "0")))
 RATE_LIMIT_SECONDS = max(0, float(os.getenv("RATE_LIMIT_SECONDS", "2")))
 ADMIN_USER_IDS = {
     int(x.strip())
@@ -146,7 +146,8 @@ def is_admin(user_id: int) -> bool:
 async def register_job(user_id: int, task: asyncio.Task, url: str, chat_id: int) -> bool:
     async with JOB_LOCK:
         jobs = USER_JOBS.setdefault(user_id, set())
-        if len(jobs) >= MAX_QUEUE_PER_USER:
+        # 0 means unlimited per-user queued jobs (still bounded by server resources).
+        if MAX_QUEUE_PER_USER > 0 and len(jobs) >= MAX_QUEUE_PER_USER:
             return False
         jobs.add(task)
         return True
@@ -176,7 +177,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 Social Media Downloader\n\n"
         "Send one or multiple media URLs in the same message. Each link is processed independently, "
-        "so multiple Telegram users/devices can use the bot at the same time.\n\n"
+        "so unlimited Telegram users/devices can use the bot concurrently, subject to server/Telegram limits.\n\n"
         "Supported: YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, "
         "Dailymotion and other yt-dlp-supported sites.\n\n"
         "Commands: /help  /status  /cancel  /mp3 <URL>"
@@ -186,8 +187,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 Help\n\n"
-        "• Send up to MAX_LINKS_PER_MESSAGE URLs in one message.\n"
-        "• Multiple users/devices are supported concurrently.\n"
+        "• Multiple links per message are supported; set MAX_LINKS_PER_MESSAGE=0 for unlimited links.\n"
+        "• Unlimited Telegram users/devices can use the same bot; jobs are isolated per user/chat.\n"
         "• /status shows your active jobs.\n"
         "• /cancel stops your queued/running jobs.\n"
         "• /mp3 <URL> extracts MP3 audio.\n"
@@ -201,7 +202,8 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     async with JOB_LOCK:
         count = len(USER_JOBS.get(user_id, set()))
-    await update.message.reply_text(f"📊 Active jobs: {count}/{MAX_QUEUE_PER_USER}\nGlobal download slots: {MAX_CONCURRENT_DOWNLOADS}")
+    queue_label = "unlimited" if MAX_QUEUE_PER_USER == 0 else str(MAX_QUEUE_PER_USER)
+    await update.message.reply_text(f"📊 Active jobs: {count}/{queue_label}\nGlobal download slots: {MAX_CONCURRENT_DOWNLOADS}")
 
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -415,7 +417,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("❌ Please send one or more valid media URLs.")
         return
 
-    if len(urls) > MAX_LINKS_PER_MESSAGE:
+    if MAX_LINKS_PER_MESSAGE > 0 and len(urls) > MAX_LINKS_PER_MESSAGE:
         await message.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per message.")
         return
 
@@ -436,7 +438,7 @@ async def mp3_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not urls:
         await update.message.reply_text("Usage: /mp3 <URL>")
         return
-    if len(urls) > MAX_LINKS_PER_MESSAGE:
+    if MAX_LINKS_PER_MESSAGE > 0 and len(urls) > MAX_LINKS_PER_MESSAGE:
         await update.message.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per command.")
         return
     for url in urls:
