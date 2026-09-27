@@ -9,8 +9,8 @@ YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, Da
 ## Features
 
 ### Multi-device / multi-user
-- Multiple Telegram users and devices can use the same bot simultaneously.
-- Per-user job tracking and queue limits.
+- Unlimited Telegram users and devices can use the same bot simultaneously (subject to Telegram, CPU, RAM, network, and host limits).
+- Per-user job tracking; MAX_QUEUE_PER_USER=0 enables an unlimited application-level queue.
 - Global concurrency control prevents the server from being overloaded.
 - Per-user rate limiting.
 - Jobs are isolated by Telegram user/chat.
@@ -20,7 +20,7 @@ YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, Da
 ### Multiple links
 - Send several URLs in one Telegram message.
 - Each URL becomes an independent download job.
-- Configurable maximum links per message.
+- Unlimited links per message/command by default (MAX_LINKS_PER_MESSAGE=0); Telegram message size and server resources still apply.
 - Multiple links can be downloaded concurrently, limited by `MAX_CONCURRENT_DOWNLOADS`.
 
 ### Quality and audio
@@ -56,8 +56,8 @@ Copy `.env.example` to `.env` and edit:
 | `DOWNLOAD_DIR` | Temporary download directory |
 | `MAX_FILE_SIZE_MB` | Maximum file size to upload |
 | `MAX_CONCURRENT_DOWNLOADS` | Global simultaneous downloads |
-| `MAX_LINKS_PER_MESSAGE` | Maximum URLs accepted per message |
-| `MAX_QUEUE_PER_USER` | Maximum active jobs per Telegram user |
+| `MAX_LINKS_PER_MESSAGE` | Maximum URLs accepted per message; 0 = unlimited |
+| `MAX_QUEUE_PER_USER` | Maximum queued jobs per user; 0 = unlimited |
 | `RATE_LIMIT_SECONDS` | Per-user request cooldown |
 | `ADMIN_USER_IDS` | Optional comma-separated Telegram IDs |
 | `COOKIES_FILE` | Optional authorized yt-dlp cookies file |
@@ -119,6 +119,14 @@ For media requiring an authenticated browser session, set `COOKIES_FILE` to a va
 ## Telegram file size
 
 The default limit is 49 MiB for normal Bot API deployments. Larger files require an appropriate Telegram Bot API configuration and corresponding application/server configuration.
+
+## Unlimited users/devices and links
+
+The bot does not maintain a fixed device/user registration list. Any Telegram account that can access the bot can submit jobs, and multiple devices/users can work at the same time. Links are processed as independent jobs.
+
+MAX_LINKS_PER_MESSAGE=0 and MAX_QUEUE_PER_USER=0 remove the application's artificial link/queue caps. This does not make the service physically unlimited: Telegram API limits, message size, available RAM/CPU/storage, network bandwidth, FFmpeg/yt-dlp workload, and MAX_CONCURRENT_DOWNLOADS still determine real capacity.
+
+For a public bot, keep a sensible RATE_LIMIT_SECONDS and MAX_CONCURRENT_DOWNLOADS to prevent overload.
 
 ## Notes
 
