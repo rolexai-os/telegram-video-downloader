@@ -1,105 +1,96 @@
 # Telegram Video Downloader
 
-> ⚠️ **TESTING / BETA:** This project is currently provided for testing, development, and educational use. Use it only with content you are legally permitted to access/download. See [`TERMS.md`](TERMS.md) for the full terms.
+> **Testing / Beta:** This project is currently in active testing and development. Use it only with content you are legally permitted to access, download, copy, or convert. See [TERMS.md](TERMS.md).
 
-Self-hosted multi-user Telegram media downloader powered by yt-dlp.
+A self-hosted Telegram media downloader built with **Python**, **python-telegram-bot**, **yt-dlp**, and **FFmpeg**.
 
-## Supported media
+## Highlights
 
-YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, Dailymotion, and other sites supported by yt-dlp.
+- 👥 Multi-user and multi-device support
+- 🔗 Multiple media URLs per message
+- ♾️ No application-level user/device registration cap
+- ⚡ Concurrent download jobs with configurable global limits
+- 🎚️ Best, 720p, and 480p quality profiles
+- 🎵 MP3 extraction
+- 📋 Per-user job tracking
+- 🛑 Job cancellation
+- ⏱️ Per-user rate limiting
+- 🔐 Environment-based secrets and optional authorized cookies
+- 🧹 Automatic temporary-file cleanup
+- 🧩 Support for sites handled by yt-dlp
 
-## Features
+## Supported platforms
 
-### Multi-device / multi-user
-- Unlimited Telegram users and devices can use the same bot simultaneously (subject to Telegram, CPU, RAM, network, and host limits).
-- Per-user job tracking; MAX_QUEUE_PER_USER=0 enables an unlimited application-level queue.
-- Global concurrency control prevents the server from being overloaded.
-- Per-user rate limiting.
-- Jobs are isolated by Telegram user/chat.
-- `/status` shows the user's active jobs.
-- `/cancel` cancels the user's active/queued tasks.
+The project can process media from **YouTube, YouTube Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, Dailymotion**, and other sites supported by the installed yt-dlp version.
 
-### Multiple links
-- Send several URLs in one Telegram message.
-- Each URL becomes an independent download job.
-- Unlimited links per message/command by default (MAX_LINKS_PER_MESSAGE=0); Telegram message size and server resources still apply.
-- Multiple links can be downloaded concurrently, limited by `MAX_CONCURRENT_DOWNLOADS`.
-
-### Quality and audio
-- Highest available compatible video quality.
-- Automatic video/audio merging with FFmpeg.
-- `/quality <URL>` provides Best, 720p and 480p choices.
-- `/mp3 <URL>` extracts 192 kbps MP3.
-- Video and audio uploads use the appropriate Telegram media type.
-
-### Reliability / performance
-- yt-dlp retries and fragment retries.
-- Concurrent fragment downloading.
-- Async job scheduling so one download does not block other users.
-- Automatic temporary-file cleanup.
-- File-size protection.
-- Socket timeout protection.
-
-### Security
-- Bot token is loaded from `.env`.
-- `.env`, cookies and downloads are ignored by Git.
-- Optional authorized cookies.txt support.
-- Per-user queue and rate limiting.
-- Optional admin-only status command.
-- No secrets are hard-coded into the source.
-
-## Configuration
-
-Copy `.env.example` to `.env` and edit:
-
-| Variable | Purpose |
-|---|---|
-| `BOT_TOKEN` | Telegram BotFather token |
-| `DOWNLOAD_DIR` | Temporary download directory |
-| `MAX_FILE_SIZE_MB` | Maximum file size to upload |
-| `MAX_CONCURRENT_DOWNLOADS` | Global simultaneous downloads |
-| `MAX_LINKS_PER_MESSAGE` | Maximum URLs accepted per message; 0 = unlimited |
-| `MAX_QUEUE_PER_USER` | Maximum queued jobs per user; 0 = unlimited |
-| `RATE_LIMIT_SECONDS` | Per-user request cooldown |
-| `ADMIN_USER_IDS` | Optional comma-separated Telegram IDs |
-| `COOKIES_FILE` | Optional authorized yt-dlp cookies file |
+Support ultimately depends on yt-dlp and the target platform's current behavior, authentication requirements, and policies.
 
 ## Commands
 
-- `/start` — overview
-- `/help` — usage help
-- `/status` — your active jobs
-- `/cancel` — cancel your jobs
-- `/mp3 <URL>` — download audio as MP3
-- `/quality <URL>` — choose Best / 720p / 480p / MP3
-- `/admin` — admin-only server status
+| Command | Description |
+|---|---|
+| `/start` | Show a quick introduction |
+| `/help` | Show usage instructions |
+| `/status` | Show your active jobs |
+| `/cancel` | Request cancellation of your jobs |
+| `/mp3 <URL>` | Download audio as MP3 |
+| `/quality <URL>` | Choose Best / 720p / 480p / MP3 |
+| `/admin` | Show admin status when authorized |
+| `/terms` | Show the in-bot beta and lawful-use notice |
+
+You can also send one or more supported media URLs as a normal message.
 
 ## Requirements
 
-- Python 3.10+
+- Python **3.10+**
 - FFmpeg
-- Telegram bot token
+- A Telegram bot token from BotFather
+- Network access to Telegram and the target media service
 
-## Install
+## Installation
+
+### Linux / macOS / Termux
+
+1. Clone the repository:
 
 ```bash
 git clone https://github.com/rolexai-os/telegram-video-downloader.git
 cd telegram-video-downloader
+```
+
+2. Create and activate a virtual environment:
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
+```
+
+3. Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
+
+4. Create the local configuration:
+
+```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell:
+5. Edit `.env` and set your BotFather token.
+
+6. Start the bot:
+
+```bash
+python bot.py
+```
+
+### Windows PowerShell
+
+After cloning and installing the requirements:
 
 ```powershell
 .venv\Scripts\Activate.ps1
-```
-
-Edit `.env`, set `BOT_TOKEN`, then:
-
-```bash
 python bot.py
 ```
 
@@ -108,60 +99,98 @@ python bot.py
 ```bash
 pkg update
 pkg install python ffmpeg
+git clone https://github.com/rolexai-os/telegram-video-downloader.git
+cd telegram-video-downloader
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 nano .env
 python bot.py
 ```
 
-## Cookies
+If your Termux environment has package or SSL issues, resolve those environment issues first; they are separate from the bot application.
 
-For media requiring an authenticated browser session, set `COOKIES_FILE` to a valid cookies file you are authorized to use. Never commit cookies or `.env`.
+## Configuration
 
-## Telegram file size
+Copy `.env.example` to `.env`. Never commit the real `.env`.
 
-The default limit is 49 MiB for normal Bot API deployments. Larger files require an appropriate Telegram Bot API configuration and corresponding application/server configuration.
+| Variable | Purpose |
+|---|---|
+| `BOT_TOKEN` | Telegram BotFather token |
+| `DOWNLOAD_DIR` | Temporary/local download directory |
+| `MAX_FILE_SIZE_MB` | Maximum file size the bot will upload |
+| `MAX_CONCURRENT_DOWNLOADS` | Global simultaneous download limit |
+| `MAX_LINKS_PER_MESSAGE` | URL limit per message; `0` = no application-level cap |
+| `MAX_QUEUE_PER_USER` | Per-user queued-job limit; `0` = no application-level cap |
+| `RATE_LIMIT_SECONDS` | Minimum delay between requests from the same user |
+| `ADMIN_USER_IDS` | Optional comma-separated Telegram numeric user IDs |
+| `COOKIES_FILE` | Optional authorized yt-dlp cookies file |
 
-## Unlimited users/devices and links
+### Capacity note
 
-The bot does not maintain a fixed device/user registration list. Any Telegram account that can access the bot can submit jobs, and multiple devices/users can work at the same time. Links are processed as independent jobs.
+Setting a limit to `0` removes that application's artificial cap; it does **not** make the service physically unlimited. Real capacity is constrained by Telegram, CPU, RAM, disk space, network bandwidth, FFmpeg/yt-dlp workload, and `MAX_CONCURRENT_DOWNLOADS`.
 
-MAX_LINKS_PER_MESSAGE=0 and MAX_QUEUE_PER_USER=0 remove the application's artificial link/queue caps. This does not make the service physically unlimited: Telegram API limits, message size, available RAM/CPU/storage, network bandwidth, FFmpeg/yt-dlp workload, and MAX_CONCURRENT_DOWNLOADS still determine real capacity.
+For public deployments, keep sensible concurrency and rate limits.
 
-For a public bot, keep a sensible RATE_LIMIT_SECONDS and MAX_CONCURRENT_DOWNLOADS to prevent overload.
+## Authenticated media
 
-## Terms & Conditions
+If a supported service requires authentication, configure `COOKIES_FILE` with a cookies file you are legally authorized to use.
 
-- **Beta status:** This bot is a testing/beta project and may change or fail without notice.
-- **Legal content only:** Download only content you own or are authorized to download.
-- **No bypassing:** Do not use the bot to bypass DRM, authentication, access controls, paywalls, or platform restrictions.
-- **User responsibility:** Users are responsible for URLs, downloads, conversions, storage, and sharing performed through their own bot instance.
-- **Third-party services:** Telegram and websites supported by yt-dlp have their own terms and policies; this project is not affiliated with those services.
-- **Privacy:** Never commit or send passwords, cookies, session tokens, API keys, or other secrets. The `.env` and cookie files are excluded from Git.
-- **Full legal notice:** See [`TERMS.md`](TERMS.md).
+**Never** publish cookies, session tokens, passwords, API keys, or other credentials.
+
+## File handling
+
+Downloaded files are temporary and are removed after processing when possible. The configured file-size limit is checked before upload.
+
+The default configuration uses a **49 MiB** upload limit. Telegram Bot API deployments with different limits require corresponding server/application configuration.
+
+## Security
+
+- Secrets are loaded from environment variables.
+- `.env` and cookie files are ignored by Git.
+- No bot token is included in the repository.
+- User jobs are tracked separately.
+- Rate limiting and global concurrency controls reduce accidental overload.
+- See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+GitHub recommends enabling repository security features such as secret scanning, push protection, Dependabot alerts, and code scanning where available.
+
+## Legal and responsible use
+
+This software is a tool. The maintainer does not determine which media users request.
+
+Use the project only for content you are legally permitted to access, download, copy, or convert. Do not use it to bypass DRM, authentication, access controls, paywalls, technical restrictions, or third-party platform rules.
+
+Review [TERMS.md](TERMS.md) before operating the bot.
+
+## Contributing
+
+Contributions, bug reports, documentation improvements, and compatible feature work are welcome.
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## Promotion
+
+Ready-to-post announcements for Telegram, X/Twitter, Reddit, LinkedIn, and Discord are available in [PROMOTION.md](PROMOTION.md).
+
+Please promote the project responsibly and follow each community's self-promotion rules. Do not spam, fake engagement, or misrepresent capabilities.
 
 ## Credits
 
 - **Project:** Telegram Video Downloader
+- **Maintainer:** rolexai-os
 - **Code assistance:** AI-assisted development
-- **Primary author/maintainer:** rolexai-os
 - **Core technologies:** Python, python-telegram-bot, yt-dlp, FFmpeg
 
-AI assistance was used to help design, write, review, and improve portions of the code. The maintainer remains responsible for reviewing, testing, configuring, and operating the project.
-
-## Notes
-
-- Multiple devices are naturally supported because Telegram identifies each user/chat independently.
-- Multiple links are processed as separate jobs.
-- The bot is self-hosted: keep it running on a VPS, PC, Raspberry Pi, Termux device, or server.
-- Download only media you have permission to access/download.
-
-## Share & Promote
-
-A ready-to-post promotion kit is available in [`PROMOTION.md`](PROMOTION.md), including X/Twitter, Telegram, Reddit, LinkedIn, and Discord announcements.
-
-For repository discoverability, use relevant GitHub topics and a clear social preview image; GitHub documents both as repository customization options.
+AI tools were used to help design, write, review, and improve portions of the project. The maintainer remains responsible for reviewing, testing, configuring, and operating the software.
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
+
+## Status
+
+**Current status: Testing / Beta**
+
+The project is expected to evolve. Compatibility with third-party media services can change without notice.
