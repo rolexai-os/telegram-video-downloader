@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 import time
-from dataclasses import dataclass
+import uuid
 from pathlib import Path
 
 import yt_dlp
@@ -46,14 +46,9 @@ GLOBAL_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 URL_REGEX = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
 USER_JOBS: dict[int, set[asyncio.Task]] = {}
 LAST_REQUEST: dict[int, float] = {}
+QUALITY_REQUESTS: dict[str, tuple[int, str]] = {}
 JOB_LOCK = asyncio.Lock()
 
-
-@dataclass
-class Job:
-    task: asyncio.Task
-    url: str
-    chat_id: int
 
 
 def clean_url(url: str) -> str:
@@ -229,16 +224,15 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🛡️ Admin status\nActive users: {users}\nActive jobs: {total}\nGlobal slots: {MAX_CONCURRENT_DOWNLOADS}")
 
 
-def quality_keyboard(url: str) -> InlineKeyboardMarkup:
-    safe = url[:3500]
+def quality_keyboard(token: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("🎥 Best", callback_data=f"q|best|{safe}"),
-                InlineKeyboardButton("📱 720p", callback_data=f"q|720|{safe}"),
-                InlineKeyboardButton("📱 480p", callback_data=f"q|480|{safe}"),
+                InlineKeyboardButton("🎥 Best", callback_data=f"q|best|{token}"),
+                InlineKeyboardButton("📱 720p", callback_data=f"q|720|{token}"),
+                InlineKeyboardButton("📱 480p", callback_data=f"q|480|{token}"),
             ],
-            [InlineKeyboardButton("🎵 MP3", callback_data=f"q|mp3|{safe}")],
+            [InlineKeyboardButton("🎵 MP3", callback_data=f"q|mp3|{token}")],
         ]
     )
 
@@ -252,7 +246,9 @@ async def quality_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not urls:
         await update.message.reply_text("Usage: /quality <URL>")
         return
-    await update.message.reply_text("Choose a quality:", reply_markup=quality_keyboard(urls[0]))
+    token = uuid.uuid4().hex[:16]
+    QUALITY_REQUESTS[token] = (user_id, urls[0])
+    await update.message.reply_text("Choose a quality:", reply_markup=quality_keyboard(token))
 
 
 def format_for_quality(profile: str) -> str:
@@ -280,12 +276,19 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     try:
-        _, profile, url = query.data.split("|", 2)
+        _, profile, token = query.data.split("|", 2)
+        stored = QUALITY_REQUESTS.pop(token, None)
+        if not stored:
+            raise ValueError("expired")
+        owner_id, url = stored
     except ValueError:
-        await query.edit_message_text("❌ Invalid quality request.")
+        await query.edit_message_text("❌ Invalid or expired quality request.")
         return
 
     user_id = query.from_user.id
+    if user_id != owner_id:
+        await query.edit_message_text("❌ This quality menu belongs to another user.")
+        return
     if await rate_limited(user_id):
         await query.edit_message_text("⏱️ Please wait before starting another request.")
         return
@@ -298,8 +301,6 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         status = await query.edit_message_text("⏳ Downloading selected quality…")
         progress = {"last": 0.0, "text": ""}
-        loop = asyncio.get_running_loop()
-
         def hook(info):
             now = time.monotonic()
             if now - progress["last"] >= 2 or info.get("status") == "finished":
@@ -340,7 +341,7 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await unregister_job(user_id, task)
 
 
-async def process_one(message, user_id: int, url: str, audio_only: bool = False):
+async def process_one(message, context, user_id: int, url: str, audio_only: bool = False):
     task = asyncio.current_task()
     if task is None or not await register_job(user_id, task, url, message.chat_id):
         await message.reply_text("❌ Your queue is full. Use /status or /cancel.")
@@ -368,7 +369,7 @@ async def process_one(message, user_id: int, url: str, audio_only: bool = False)
             return
 
         await status.edit_text("📤 Uploading…")
-        await context_bot_action(message)
+        await context.bot.send_chat_action(message.chat_id, ChatAction.UPLOAD_VIDEO)
         with file_path.open("rb") as fh:
             if audio_only:
                 await message.reply_audio(audio=InputFile(fh, filename=file_path.name))
@@ -399,13 +400,6 @@ async def process_one(message, user_id: int, url: str, audio_only: bool = False)
         await unregister_job(user_id, task)
 
 
-async def context_bot_action(message):
-    try:
-        await message._bot.send_chat_action(message.chat_id, ChatAction.UPLOAD_VIDEO)
-    except Exception:
-        pass
-
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message or not message.text:
@@ -427,7 +421,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tasks = []
     for url in urls:
-        task = asyncio.create_task(process_one(message, user_id, url))
+        task = asyncio.create_task(process_one(message, context, user_id, url))
         tasks.append(task)
 
     await message.reply_text(f"📥 Queued {len(tasks)} link(s). You can use /status to monitor your jobs.")
@@ -446,7 +440,7 @@ async def mp3_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per command.")
         return
     for url in urls:
-        asyncio.create_task(process_one(update.message, user_id, url, audio_only=True))
+        asyncio.create_task(process_one(update.message, context, user_id, url, audio_only=True))
     await update.message.reply_text(f"🎵 Queued {len(urls)} MP3 job(s).")
 
 
