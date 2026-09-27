@@ -180,7 +180,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "so unlimited Telegram users/devices can use the bot concurrently, subject to server/Telegram limits.\n\n"
         "Supported: YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, "
         "Dailymotion and other yt-dlp-supported sites.\n\n"
-        "Commands: /help  /status  /cancel  /mp3 <URL>"
+        "Commands: /help  /terms  /status  /cancel  /mp3 <URL>"
+    )
+
+
+async def terms_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "⚖️ Terms & Conditions / Beta Notice\n\n"
+        "This bot is a TESTING/BETA project. Use it only for lawful testing.\n"
+        "Only download content you own or have permission to download. Do not use the bot to infringe copyright, bypass access controls, violate platform rules, or download unlawful content.\n"
+        "You are responsible for your use of the bot and the content you submit/download. The project is provided as-is for testing and development, without guarantees of availability or suitability.\n\n"
+        "Full terms: see TERMS.md in the GitHub repository."
     )
 
 
@@ -455,6 +465,7 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("terms", terms_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("mp3", mp3_cmd))
