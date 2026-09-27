@@ -156,6 +156,12 @@ AI assistance was used to help design, write, review, and improve portions of th
 - The bot is self-hosted: keep it running on a VPS, PC, Raspberry Pi, Termux device, or server.
 - Download only media you have permission to access/download.
 
+## Share & Promote
+
+A ready-to-post promotion kit is available in [`PROMOTION.md`](PROMOTION.md), including X/Twitter, Telegram, Reddit, LinkedIn, and Discord announcements.
+
+For repository discoverability, use relevant GitHub topics and a clear social preview image; GitHub documents both as repository customization options.
+
 ## License
 
 MIT
