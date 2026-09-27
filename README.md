@@ -1,5 +1,7 @@
 # Telegram Video Downloader
 
+> ⚠️ **TESTING / BETA:** This project is currently provided for testing, development, and educational use. Use it only with content you are legally permitted to access/download. See [`TERMS.md`](TERMS.md) for the full terms.
+
 Self-hosted multi-user Telegram media downloader powered by yt-dlp.
 
 ## Supported media
@@ -127,6 +129,25 @@ The bot does not maintain a fixed device/user registration list. Any Telegram ac
 MAX_LINKS_PER_MESSAGE=0 and MAX_QUEUE_PER_USER=0 remove the application's artificial link/queue caps. This does not make the service physically unlimited: Telegram API limits, message size, available RAM/CPU/storage, network bandwidth, FFmpeg/yt-dlp workload, and MAX_CONCURRENT_DOWNLOADS still determine real capacity.
 
 For a public bot, keep a sensible RATE_LIMIT_SECONDS and MAX_CONCURRENT_DOWNLOADS to prevent overload.
+
+## Terms & Conditions
+
+- **Beta status:** This bot is a testing/beta project and may change or fail without notice.
+- **Legal content only:** Download only content you own or are authorized to download.
+- **No bypassing:** Do not use the bot to bypass DRM, authentication, access controls, paywalls, or platform restrictions.
+- **User responsibility:** Users are responsible for URLs, downloads, conversions, storage, and sharing performed through their own bot instance.
+- **Third-party services:** Telegram and websites supported by yt-dlp have their own terms and policies; this project is not affiliated with those services.
+- **Privacy:** Never commit or send passwords, cookies, session tokens, API keys, or other secrets. The `.env` and cookie files are excluded from Git.
+- **Full legal notice:** See [`TERMS.md`](TERMS.md).
+
+## Credits
+
+- **Project:** Telegram Video Downloader
+- **Code assistance:** AI-assisted development
+- **Primary author/maintainer:** rolexai-os
+- **Core technologies:** Python, python-telegram-bot, yt-dlp, FFmpeg
+
+AI assistance was used to help design, write, review, and improve portions of the code. The maintainer remains responsible for reviewing, testing, configuring, and operating the project.
 
 ## Notes
 
