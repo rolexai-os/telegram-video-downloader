@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: telegram-video-downloader
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeploy: true
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: DOWNLOAD_DIR
+        value: /tmp/downloads
+      - key: MAX_FILE_SIZE_MB
+        value: "49"
+      - key: MAX_CONCURRENT_DOWNLOADS
+        value: "1"
+      - key: MAX_LINKS_PER_MESSAGE
+        value: "10"
+      - key: MAX_QUEUE_PER_USER
+        value: "5"
+      - key: RATE_LIMIT_SECONDS
+        value: "2"
+      - key: ADMIN_USER_IDS
+        value: ""
