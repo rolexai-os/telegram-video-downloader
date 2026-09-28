@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python files
+        run: python -m compileall -q bot.py runner.py web.py update.py
+      - name: Check release wiring
+        run: |
+          test -s VERSION
+          test -f bot.py
+          test -f runner.py
+          test -f web.py
+          test -f Dockerfile
+          test -f render.yaml
+          test -f requirements.txt
+          test -f .env.example
+          grep -q 'runner.py' web.py
+          grep -q 'runner.py' README.md
+          grep -q 'yt-dlp' requirements.txt
+          grep -q 'gunicorn' requirements.txt
