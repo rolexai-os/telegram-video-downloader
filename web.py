@@ -1,7 +1,7 @@
 """Small Render-compatible WSGI wrapper.
 
-Render can start this project with Gunicorn while the Telegram bot runs as a
-child process. One Gunicorn worker is required so only one bot instance runs.
+Gunicorn serves the health endpoint while the Telegram bot runs as one child
+process. The child uses runner.py so yt-dlp gets defensive retry handling.
 """
 
 import os
@@ -17,7 +17,7 @@ def start_bot():
     global BOT_PROCESS
     if BOT_PROCESS is not None and BOT_PROCESS.poll() is None:
         return
-    BOT_PROCESS = subprocess.Popen([sys.executable, str(Path(__file__).with_name("bot.py"))])
+    BOT_PROCESS = subprocess.Popen([sys.executable, str(Path(__file__).with_name("runner.py"))])
 
 
 start_bot()
