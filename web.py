@@ -1,10 +1,4 @@
-"""Small Render-compatible WSGI wrapper.
-
-Gunicorn serves the health endpoint while the Telegram bot runs as one child
-process. The child uses runner.py so yt-dlp gets defensive retry handling.
-"""
-
-import os
+"""Render-compatible WSGI health server that launches the robust Telegram runner."""
 import signal
 import subprocess
 import sys
@@ -17,7 +11,8 @@ def start_bot():
     global BOT_PROCESS
     if BOT_PROCESS is not None and BOT_PROCESS.poll() is None:
         return
-    BOT_PROCESS = subprocess.Popen([sys.executable, str(Path(__file__).with_name("runner.py"))])
+    runner = Path(__file__).with_name("runner.py")
+    BOT_PROCESS = subprocess.Popen([sys.executable, str(runner)])
 
 
 start_bot()
@@ -29,9 +24,9 @@ def app(environ, start_response):
         start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])
         return [b"Not found"]
 
-    bot_running = BOT_PROCESS is not None and BOT_PROCESS.poll() is None
-    body = b"telegram-video-downloader: ok\n" if bot_running else b"telegram-video-downloader: bot stopped\n"
-    status = "200 OK" if bot_running else "503 Service Unavailable"
+    running = BOT_PROCESS is not None and BOT_PROCESS.poll() is None
+    body = b"telegram-video-downloader: ok\n" if running else b"telegram-video-downloader: bot stopped\n"
+    status = "200 OK" if running else "503 Service Unavailable"
     start_response(status, [("Content-Type", "text/plain; charset=utf-8"), ("Content-Length", str(len(body)))])
     return [body]
 
