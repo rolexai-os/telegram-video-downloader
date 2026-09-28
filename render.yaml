@@ -5,6 +5,7 @@ services:
     plan: free
     branch: main
     autoDeploy: true
+    healthCheckPath: /healthz
     envVars:
       - key: BOT_TOKEN
         sync: false
