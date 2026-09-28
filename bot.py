@@ -37,6 +37,9 @@ ADMIN_USER_IDS = {
     if x.strip().isdigit()
 }
 COOKIES_FILE = os.getenv("COOKIES_FILE", "").strip()
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip() or os.getenv("RENDER_EXTERNAL_URL", "").strip()
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
+PORT = int(os.getenv("PORT", "10000"))
 
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
@@ -48,7 +51,6 @@ USER_JOBS: dict[int, set[asyncio.Task]] = {}
 LAST_REQUEST: dict[int, float] = {}
 QUALITY_REQUESTS: dict[str, tuple[int, str]] = {}
 JOB_LOCK = asyncio.Lock()
-
 
 
 def clean_url(url: str) -> str:
@@ -146,7 +148,6 @@ def is_admin(user_id: int) -> bool:
 async def register_job(user_id: int, task: asyncio.Task, url: str, chat_id: int) -> bool:
     async with JOB_LOCK:
         jobs = USER_JOBS.setdefault(user_id, set())
-        # 0 means unlimited per-user queued jobs (still bounded by server resources).
         if MAX_QUEUE_PER_USER > 0 and len(jobs) >= MAX_QUEUE_PER_USER:
             return False
         jobs.add(task)
@@ -177,10 +178,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 Social Media Downloader\n\n"
         "Send one or multiple media URLs in the same message. Each link is processed independently, "
-        "so unlimited Telegram users/devices can use the bot concurrently, subject to server/Telegram limits.\n\n"
+        "subject to Telegram and hosting limits.\n\n"
         "Supported: YouTube, Shorts, Instagram/Reels, X/Twitter, Facebook, TikTok, Reddit, Vimeo, "
         "Dailymotion and other yt-dlp-supported sites.\n\n"
-        "Commands: /help  /terms  /status  /cancel  /mp3 <URL>"
+        "Commands: /help  /terms  /status  /cancel  /mp3 <URL>  /quality <URL>"
     )
 
 
@@ -197,12 +198,11 @@ async def terms_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 Help\n\n"
-        "• Multiple links per message are supported; set MAX_LINKS_PER_MESSAGE=0 for unlimited links.\n"
-        "• Unlimited Telegram users/devices can use the same bot; jobs are isolated per user/chat.\n"
+        "• Send one or more supported media URLs.\n"
         "• /status shows your active jobs.\n"
         "• /cancel stops your queued/running jobs.\n"
         "• /mp3 <URL> extracts MP3 audio.\n"
-        "• Use /quality <URL> to choose a quality profile.\n\n"
+        "• /quality <URL> offers Best / 720p / 480p / MP3.\n\n"
         "For authenticated media, configure COOKIES_FILE with a valid cookies.txt you are authorized to use.\n"
         "Only download content you have permission to access/download."
     )
@@ -310,16 +310,17 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Your job queue is full.")
         return
 
+    file_path = None
     try:
         status = await query.edit_message_text("⏳ Downloading selected quality…")
-        progress = {"last": 0.0, "text": ""}
+        progress = {"last": 0.0}
+
         def hook(info):
             now = time.monotonic()
             if now - progress["last"] >= 2 or info.get("status") == "finished":
                 progress["last"] = now
-                progress["text"] = progress_text(info)
+                logger.info("%s | %s | %s", url, info.get("status"), progress_text(info))
 
-        file_path = None
         async with GLOBAL_SEMAPHORE:
             file_path = await asyncio.to_thread(sync_quality_download, url, profile, hook)
         if not file_path or not file_path.exists():
@@ -333,11 +334,7 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if profile == "mp3":
                 await query.message.reply_audio(audio=InputFile(fh, filename=file_path.name))
             else:
-                await query.message.reply_video(
-                    video=InputFile(fh, filename=file_path.name),
-                    caption=f"✅ {file_path.name}"[:1024],
-                    supports_streaming=True,
-                )
+                await query.message.reply_video(video=InputFile(fh, filename=file_path.name), caption=f"✅ {file_path.name}"[:1024], supports_streaming=True)
         await status.delete()
     except asyncio.CancelledError:
         await query.edit_message_text("🛑 Job cancelled.")
@@ -386,11 +383,7 @@ async def process_one(message, context, user_id: int, url: str, audio_only: bool
             if audio_only:
                 await message.reply_audio(audio=InputFile(fh, filename=file_path.name))
             else:
-                await message.reply_video(
-                    video=InputFile(fh, filename=file_path.name),
-                    caption=f"✅ {file_path.name}"[:1024],
-                    supports_streaming=True,
-                )
+                await message.reply_video(video=InputFile(fh, filename=file_path.name), caption=f"✅ {file_path.name}"[:1024], supports_streaming=True)
         await status.delete()
     except asyncio.CancelledError:
         try:
@@ -431,11 +424,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per message.")
         return
 
-    tasks = []
-    for url in urls:
-        task = asyncio.create_task(process_one(message, context, user_id, url))
-        tasks.append(task)
-
+    tasks = [asyncio.create_task(process_one(message, context, user_id, url)) for url in urls]
     await message.reply_text(f"📥 Queued {len(tasks)} link(s). You can use /status to monitor your jobs.")
 
 
@@ -458,7 +447,7 @@ async def mp3_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not BOT_TOKEN:
-        raise SystemExit("BOT_TOKEN is not set. Copy .env.example to .env and configure it.")
+        raise SystemExit("BOT_TOKEN is not set. Configure it in .env or your hosting provider.")
     if shutil.which("ffmpeg") is None:
         logger.warning("ffmpeg was not found; some downloads/audio conversions may fail")
 
@@ -473,8 +462,24 @@ def main():
     app.add_handler(CommandHandler("admin", admin_status))
     app.add_handler(CallbackQueryHandler(quality_callback, pattern=r"^q\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    logger.info("Bot is running")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    if WEBHOOK_URL:
+        webhook_base = WEBHOOK_URL.rstrip("/")
+        webhook_url = f"{webhook_base}/telegram"
+        logger.info("Bot is running in webhook mode: %s", webhook_url)
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="telegram",
+            webhook_url=webhook_url,
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+            secret_token=WEBHOOK_SECRET or None,
+            max_connections=20,
+        )
+    else:
+        logger.info("Bot is running in polling mode")
+        app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
 if __name__ == "__main__":
