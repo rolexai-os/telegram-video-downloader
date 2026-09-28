@@ -17,4 +17,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY . .
 RUN mkdir -p /tmp/downloads
 
-CMD ["python", "bot.py"]
+# Gunicorn serves Render's health port and web.py starts the Telegram bot.
+# One worker is intentional: multiple workers would start multiple bot instances.
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --timeout 0 web:app"]
