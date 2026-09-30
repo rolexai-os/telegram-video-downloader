@@ -17,6 +17,20 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Compile Python files
         run: python -m compileall -q bot.py runner.py web.py update.py
+      - name: Import and entrypoint smoke test
+        run: |
+          python - <<'PY'
+          import inspect
+          import bot
+          import runner
+          assert callable(bot.main)
+          assert callable(bot.download)
+          assert "profile" in inspect.signature(runner.robust_sync_download).parameters
+          assert "captions" in inspect.signature(runner.robust_sync_download).parameters
+          assert "profile" in inspect.signature(runner.robust_download_media).parameters
+          assert "captions" in inspect.signature(runner.robust_download_media).parameters
+          print("application/runner wiring OK")
+          PY
       - name: Check release wiring
         run: |
           test -s VERSION
@@ -31,3 +45,5 @@ jobs:
           grep -q 'runner.py' README.md
           grep -q 'yt-dlp' requirements.txt
           grep -q 'gunicorn' requirements.txt
+          grep -q 'PLAYLIST_MAX_ITEMS' .env.example
+          grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
