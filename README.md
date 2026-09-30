@@ -15,7 +15,7 @@ A self-hosted Telegram media downloader built with Python, python-telegram-bot, 
 - MP3 extraction with FFmpeg
 - Subtitle/caption download (`/subs` or Captions button)
 - Playlist/batch downloading with configurable item limit
-- Original-title based filenames with collision-safe temporary handling
+- Original-title based filenames
 - Resume-capable yt-dlp transfers
 
 ### User experience
@@ -140,6 +140,8 @@ The updater preserves `.env` and authorized local cookies, updates dependencies,
 
 Use the repository `Dockerfile`/`render.yaml`, connect the `main` branch and add `BOT_TOKEN` as a Render Environment Variable. Enable auto-deploy so new releases are deployed after validated commits. `web.py` launches `runner.py`, keeping local and Render download behavior aligned.
 
+**Free-tier note:** Render's local filesystem is not durable. SQLite history/favorites and downloaded temporary files are therefore local to the running instance unless you add persistent storage or an external database.
+
 ## Validation
 
 ```bash
@@ -154,4 +156,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.3.0**
+**Testing / Beta — v1.3.1**
