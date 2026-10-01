@@ -191,9 +191,14 @@ async def version_cmd(update, context):
     base = Path("VERSION").read_text().strip() if Path("VERSION").exists() else "dev"
     await update.effective_message.reply_text(f"🤖 Telegram Video Downloader\nBase release: v{base}\nRunner features: v{FEATURE_VERSION}\nStatus: Testing/Beta")
 
+def ensure_feature_schema():
+    c = bot.db()
+    c.execute("CREATE TABLE IF NOT EXISTS announcements(id INTEGER PRIMARY KEY AUTOINCREMENT,message TEXT,created_at INTEGER,active INTEGER DEFAULT 1)")
+    c.commit(); c.close()
+
 def main():
     if not bot.BOT_TOKEN: raise SystemExit("BOT_TOKEN is not set")
-    bot.db()
+    bot.db(); ensure_feature_schema()
     app = bot.Application.builder().token(bot.BOT_TOKEN).build()
     commands = {
         "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
