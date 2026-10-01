@@ -29,6 +29,10 @@ jobs:
           assert "captions" in inspect.signature(runner.robust_sync_download).parameters
           assert "profile" in inspect.signature(runner.robust_download_media).parameters
           assert "captions" in inspect.signature(runner.robust_download_media).parameters
+          assert callable(runner.analyze_cmd)
+          assert callable(runner.pause_cmd)
+          assert callable(runner.resume_cmd)
+          assert callable(runner.stats_cmd)
           print("application/runner wiring OK")
           PY
       - name: Check release wiring
@@ -47,3 +51,5 @@ jobs:
           grep -q 'gunicorn' requirements.txt
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
+          grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
+          test "$(cat VERSION)" = "1.4.0"
