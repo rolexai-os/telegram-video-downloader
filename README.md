@@ -14,7 +14,6 @@ This release connects the roadmap features that can safely run in the existing s
 - Multiple URLs per message
 - Playlist/batch downloading with a configurable item limit
 - Resume-capable yt-dlp transfers and fragment retries
-- Automatic preferred quality through saved user settings
 - MP3 extraction with configurable default audio quality
 - Subtitle/caption downloads
 - Progress percentage, speed and ETA
@@ -30,7 +29,6 @@ This release connects the roadmap features that can safely run in the existing s
 - Personal download statistics
 - Saved language, quality, audio and caption preferences
 - English, Malayalam, Hindi and Tamil UI preference
-- Custom filename support through the existing /filename command
 
 ### Administration
 - Admin dashboard
@@ -61,11 +59,9 @@ This release connects the roadmap features that can safely run in the existing s
 | /analyze <URL> | Inspect media and available formats |
 | /quality <URL> | Interactive quality selection |
 | /mp3 <URL> | Extract audio |
-| /audio 128\|192\|256\|320 | Set audio quality and enable audio mode |
 | /subs <URL> | Download with available captions |
 | /playlist <URL> | Queue an authorized playlist batch |
 | /settings | User preferences |
-| /filename <name> | Set a filename template; /filename off resets it |
 | /history [search] | Recent/searchable history |
 | /favorites | Saved URLs |
 | /stats | Personal usage statistics |
@@ -169,7 +165,6 @@ web.py launches runner.py, so the same downloader/retry logic is used locally an
 - Personal statistics
 - Admin cleanup and announcements
 - Improved retry/error guidance
-- Audio-quality configuration
 - Versioned release and synchronized configuration/docs
 
 ### Planned architecture work
