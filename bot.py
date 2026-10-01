@@ -70,6 +70,32 @@ def favorite(uid,url,title):
 
 def clean_url(url): return url.rstrip(".,!?)]}>\"'")
 
+def user_error_message(exc):
+    """Return a safe, non-technical message for Telegram users.
+
+    The complete exception is still logged by the caller. Authentication,
+    cookies, HTTP, extractor and network details are intentionally hidden
+    from the user instead of exposing raw yt-dlp output.
+    """
+    s=" ".join(str(exc).replace("\n"," ").split()).lower()
+    if any(x in s for x in ("login", "sign in", "authentication", "cookies", "requires authentication", "you need to log in")):
+        return "⚠️ This link requires access/login and was skipped. The bot will not bypass authentication."
+    if "403" in s or "forbidden" in s:
+        return "⚠️ The source rejected this link, so it was skipped."
+    if "429" in s or "rate limit" in s:
+        return "⚠️ The source temporarily rate-limited this link. Please try again later."
+    if "404" in s or "not found" in s:
+        return "⚠️ This media is unavailable or no longer exists."
+    if "unsupported url" in s:
+        return "⚠️ This link is not supported."
+    if "ffmpeg" in s:
+        return "⚠️ The bot could not process this media."
+    if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
+        return "⚠️ A temporary network problem prevented this download."
+    if "above the configured" in s or ("file is " in s and "mb" in s):
+        return "⚠️ This file is larger than the bot's upload limit."
+    return "⚠️ This link could not be downloaded."
+
 def size_text(n):
     if not n:return "unknown"
     for u in ("B","KB","MB","GB"):
@@ -214,7 +240,7 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
         except Exception:pass
     except Exception as exc:
         history(uid,url,"","failed");logger.exception("download failed")
-        try:await status.edit_text(f"❌ {str(exc).replace(chr(10),' ')[:500]}")
+        try:await status.edit_text(user_error_message(exc))
         except Exception:pass
     finally:
         if file_path and file_path.exists():
@@ -242,7 +268,9 @@ async def quality_cmd(update,context):
         extra=f"\n🎬 {title[:100]}\n📐 Available: {', '.join(str(x) for x in heights[:8])}p" if heights else ""
         if sizes:extra+=f"\n💾 Largest listed format: {size_text(max(sizes))}"
         await update.effective_message.reply_text("Choose a format:"+extra,reply_markup=quality_keyboard(token))
-    except Exception:await update.effective_message.reply_text("Choose a format:",reply_markup=quality_keyboard(token))
+    except Exception as exc:
+        logger.exception("format inspection failed")
+        await update.effective_message.reply_text(user_error_message(exc))
 
 async def quality_callback(update,context):
     q=update.callback_query;await q.answer();_,profile,token=q.data.split("|",2);item=QUALITY_REQUESTS.pop(token,None)
@@ -262,7 +290,9 @@ async def quality_callback(update,context):
             if audio:await q.message.reply_audio(audio=InputFile(fh,filename=file_path.name))
             else:await q.message.reply_video(video=InputFile(fh,filename=file_path.name),caption=f"✅ {file_path.stem}"[:1024],supports_streaming=True)
     except asyncio.CancelledError:history(uid,url,"","cancelled");await q.edit_message_text("🛑 Cancelled.")
-    except Exception as exc:history(uid,url,"","failed");logger.exception("quality download failed");await q.edit_message_text(f"❌ {str(exc).replace(chr(10),' ')[:500]}")
+    except Exception as exc:
+        history(uid,url,"","failed");logger.exception("quality download failed")
+        await q.edit_message_text(user_error_message(exc))
     finally:
         if file_path and file_path.exists():
             try:file_path.unlink()
@@ -296,7 +326,9 @@ async def playlist_cmd(update,context):
             u=e.get("webpage_url") or e.get("url")
             if u:asyncio.create_task(process_one(update.effective_message,context,uid,u))
         await update.effective_message.reply_text(f"📥 Queued {len(entries)} playlist item(s).")
-    except Exception as exc:await update.effective_message.reply_text(f"❌ Playlist error: {str(exc)[:400]}")
+    except Exception as exc:
+        logger.exception("playlist extraction failed")
+        await update.effective_message.reply_text(user_error_message(exc))
 
 async def callback(update,context):
     q=update.callback_query;await q.answer();data=q.data
