@@ -1,87 +1,219 @@
 #!/usr/bin/env python3
-"""Production runner with defensive yt-dlp error handling."""
-import asyncio
-import logging
-import os
-import random
-import time
+"""Production runner with robust yt-dlp handling and roadmap feature extensions."""
+import asyncio, logging, os, random, time
 from pathlib import Path
 import yt_dlp
 import bot
 
-logger = logging.getLogger("telegram-video-downloader.runner")
+log = logging.getLogger("telegram-video-downloader.runner")
 MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
 RETRY_DELAY = max(0.5, float(os.getenv("YTDLP_RETRY_DELAY", "2")))
 FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on"}
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
-DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
+PAUSED_USERS = set()
+FEATURE_VERSION = "1.4.0"
 
-
-def _error_text(exc): return " ".join(str(exc).replace("\n", " ").split())[:1000]
+def error_text(exc):
+    return " ".join(str(exc).replace("\n"," ").split())[:1000]
 
 def classify_error(exc):
-    text=_error_text(exc).lower()
-    checks=[
-        (("403","forbidden"),"HTTP 403 Forbidden: the source rejected the media request"),
-        (("429","too many requests","rate limit"),"HTTP 429: the source rate-limited the request"),
-        (("401","unauthorized"),"HTTP 401 Unauthorized: authentication may be required"),
-        (("404","not found"),"HTTP 404: media was not found or is no longer available"),
-        (("timed out","timeout"),"Network timeout while contacting the source"),
-        (("name or service not known","temporary failure in name resolution"),"DNS/network resolution failed"),
-        (("certificate","ssl","tls"),"TLS/SSL connection error"),
-        (("ffmpeg",),"FFmpeg processing error"),
-        (("unsupported url",),"This URL is not supported by yt-dlp"),
-        (("login","sign in","authentication"),"The source requires authentication"),
+    s = error_text(exc).lower()
+    rules = [
+        (("403","forbidden"), "HTTP 403: the source rejected the media request; authorized cookies may be required."),
+        (("429","rate limit"), "HTTP 429: the source rate-limited this request; wait and retry."),
+        (("401","unauthorized"), "HTTP 401: authentication may be required."),
+        (("404","not found"), "HTTP 404: media was not found or is no longer available."),
+        (("timeout","timed out"), "Network timeout while contacting the source."),
+        (("name or service not known","temporary failure in name resolution"), "DNS/network resolution failed."),
+        (("ssl","tls","certificate"), "TLS/SSL connection failed."),
+        (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg is installed."),
+        (("unsupported url",), "This URL is not supported by yt-dlp."),
+        (("login","sign in","authentication"), "The source requires authentication; use only authorized cookies."),
     ]
-    for needles,label in checks:
-        if any(x in text for x in needles): return label
-    return "Download failed"
+    for needles, message in rules:
+        if any(x in s for x in needles):
+            return message
+    return "Download failed. Check the URL and bot logs."
 
-
-def _base_opts(template, audio_only, progress_hook=None, attempt=1, profile="best", captions=False, playlist=False):
-    opts={"format":"bestaudio/best" if audio_only else bot.format_for_quality(profile),"outtmpl":template,"merge_output_format":"mp4","noplaylist":not playlist,"quiet":True,"no_warnings":False,"retries":3,"fragment_retries":5,"file_access_retries":3,"extractor_retries":3,"socket_timeout":30,"connecttimeout":30,"continuedl":True,"overwrites":False,"restrictfilenames":False,"windowsfilenames":True,"concurrent_fragment_downloads":1,"http_chunk_size":10*1024*1024}
-    if audio_only: opts["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
-    if captions: opts.update({"writesubtitles":True,"writeautomaticsub":True,"subtitleslangs":["all"],"subtitlesformat":"srt/vtt/best"})
-    if progress_hook: opts["progress_hooks"]=[progress_hook]
-    if bot.COOKIES_FILE and Path(bot.COOKIES_FILE).is_file(): opts["cookiefile"]=bot.COOKIES_FILE
-    if FORCE_IPV4 or attempt>=2: opts["source_address"]="0.0.0.0"
-    ua=USER_AGENT or (DEFAULT_UA if attempt>=2 else "")
-    if ua: opts["http_headers"]={"User-Agent":ua}
-    return opts
-
+def download_options(template, audio, hook, attempt, profile="best", captions=False):
+    o = {
+        "format": "bestaudio/best" if audio else bot.format_for_quality(profile),
+        "outtmpl": template, "merge_output_format": "mp4", "noplaylist": True,
+        "quiet": True, "retries": 3, "fragment_retries": 5,
+        "file_access_retries": 3, "extractor_retries": 3,
+        "socket_timeout": 30, "connecttimeout": 30, "continuedl": True,
+        "overwrites": False, "restrictfilenames": False, "windowsfilenames": True,
+        "concurrent_fragment_downloads": 1, "http_chunk_size": 10*1024*1024,
+    }
+    if audio:
+        o["postprocessors"] = [{"key":"FFmpegExtractAudio","preferredcodec":"mp3",
+                                "preferredquality":os.getenv("DEFAULT_AUDIO_QUALITY","192")}]
+    if captions:
+        o.update(writesubtitles=True, writeautomaticsub=True,
+                 subtitleslangs=["all"], subtitlesformat="srt/vtt/best")
+    if hook: o["progress_hooks"] = [hook]
+    if bot.COOKIES_FILE and Path(bot.COOKIES_FILE).is_file():
+        o["cookiefile"] = bot.COOKIES_FILE
+    if FORCE_IPV4 or attempt >= 2: o["source_address"] = "0.0.0.0"
+    ua = USER_AGENT or (DEFAULT_UA if attempt >= 2 else "")
+    if ua: o["http_headers"] = {"User-Agent": ua}
+    return o
 
 def robust_sync_download(url, audio_only=False, progress_hook=None, profile="best", captions=False):
-    suffix="mp3" if audio_only else "%(ext)s"
-    template=str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
-    last=None
-    for attempt in range(1,MAX_ATTEMPTS+1):
+    suffix = "mp3" if audio_only else "%(ext)s"
+    template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
+    last = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            opts=_base_opts(template,audio_only,progress_hook,attempt,profile,captions)
-            logger.info("yt-dlp attempt %d/%d: %s",attempt,MAX_ATTEMPTS,url)
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info=ydl.extract_info(url,download=True)
-                if info and info.get("entries"): info=next((x for x in info["entries"] if x),None)
-                result=bot.locate_result(ydl,info,audio_only) if info else None
-                if result:return result
+            with yt_dlp.YoutubeDL(download_options(template, audio_only, progress_hook, attempt, profile, captions)) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if info and info.get("entries"):
+                    info = next((x for x in info["entries"] if x), None)
+                result = bot.locate_result(ydl, info, audio_only) if info else None
+                if result: return result
                 raise RuntimeError("yt-dlp completed without producing a media file")
-        except (asyncio.CancelledError,KeyboardInterrupt): raise
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            raise
         except Exception as exc:
-            last=exc; logger.warning("Attempt %d/%d failed: %s | %s",attempt,MAX_ATTEMPTS,classify_error(exc),_error_text(exc))
-            if attempt<MAX_ATTEMPTS: time.sleep(RETRY_DELAY*attempt+random.uniform(0,0.75))
-    raise last if last else RuntimeError("Download failed")
-
+            last = exc
+            log.warning("yt-dlp attempt %s/%s: %s | %s", attempt, MAX_ATTEMPTS, classify_error(exc), error_text(exc))
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(RETRY_DELAY * attempt + random.uniform(0, 0.75))
+    raise last or RuntimeError("Download failed")
 
 def robust_sync_quality_download(url, profile, progress_hook=None, captions=False):
-    return robust_sync_download(url,False,progress_hook,profile,captions)
-
+    return robust_sync_download(url, False, progress_hook, profile, captions)
 
 async def robust_download_media(url, audio_only=False, progress_hook=None, profile="best", captions=False):
-    async with bot.GLOBAL_SEMAPHORE:
-        return await asyncio.to_thread(robust_sync_download,url,audio_only,progress_hook,profile,captions)
+    return await asyncio.to_thread(robust_sync_download, url, audio_only, progress_hook, profile, captions)
 
+bot.sync_download = robust_sync_download
+bot.sync_quality_download = robust_sync_quality_download
+bot.download_media = robust_download_media
+bot.format_for_quality = getattr(bot, "format_for_quality", bot.fmt)
+bot.locate_result = getattr(bot, "locate_result", bot.locate)
 
-bot.sync_download=robust_sync_download
-bot.sync_quality_download=robust_sync_quality_download
-bot.download_media=robust_download_media
+async def analyze_cmd(update, context):
+    urls = [bot.clean_url(x) for x in bot.URL_RE.findall(" ".join(context.args))]
+    if not urls:
+        return await update.effective_message.reply_text("Usage: /analyze <URL>")
+    url = urls[0]
+    try:
+        def inspect():
+            opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                    "noplaylist": True, "socket_timeout": 20}
+            if bot.COOKIES_FILE and Path(bot.COOKIES_FILE).is_file():
+                opts["cookiefile"] = bot.COOKIES_FILE
+            with yt_dlp.YoutubeDL(opts) as y: return y.extract_info(url, download=False)
+        info = await asyncio.to_thread(inspect)
+        formats = info.get("formats", []) if info else []
+        heights = sorted({f.get("height") for f in formats if f.get("height")}, reverse=True)
+        sizes = [f.get("filesize") or f.get("filesize_approx") for f in formats
+                 if f.get("filesize") or f.get("filesize_approx")]
+        token = "an" + uuid_token()
+        bot.QUALITY_REQUESTS[token] = (update.effective_user.id, url, time.time())
+        msg = (f"🔎 {info.get('title','Unknown')[:120]}\n"
+               f"🌐 {urlparse_host(url)}\n"
+               f"👤 {info.get('uploader') or info.get('channel') or 'unknown'}\n"
+               f"⏱️ {info.get('duration') or 'unknown'}s\n"
+               f"📐 {', '.join(map(str, heights[:12])) or 'unknown'}p\n"
+               f"💾 {bot.size_text(max(sizes)) if sizes else 'unknown'}\n"
+               f"🧩 Formats: {len(formats)}")
+        await update.effective_message.reply_text(msg, reply_markup=bot.quality_keyboard(token))
+    except Exception as exc:
+        await update.effective_message.reply_text("❌ " + classify_error(exc))
 
-if __name__ == "__main__": bot.main()
+def uuid_token():
+    import uuid
+    return uuid.uuid4().hex[:12]
+
+def urlparse_host(url):
+    from urllib.parse import urlparse
+    return urlparse(url).netloc or "unknown"
+
+async def pause_cmd(update, context):
+    PAUSED_USERS.add(update.effective_user.id)
+    await update.effective_message.reply_text("⏸️ Queue paused. Active downloads continue; queued jobs wait.")
+
+async def resume_cmd(update, context):
+    PAUSED_USERS.discard(update.effective_user.id)
+    await update.effective_message.reply_text("▶️ Queue resumed.")
+
+async def queue_cmd(update, context):
+    uid = update.effective_user.id
+    async with bot.LOCK: jobs = len(bot.JOBS.get(uid, set()))
+    state = "paused" if uid in PAUSED_USERS else "running"
+    await update.effective_message.reply_text(f"📋 Jobs: {jobs}\nQueue: {state}\nConcurrency: {bot.MAX_CONCURRENT_DOWNLOADS}")
+
+_original_process_one = bot.process_one
+async def gated_process_one(*args, **kwargs):
+    uid = args[2] if len(args) > 2 else kwargs.get("uid")
+    while uid in PAUSED_USERS:
+        await asyncio.sleep(1)
+    return await _original_process_one(*args, **kwargs)
+bot.process_one = gated_process_one
+
+async def stats_cmd(update, context):
+    uid = update.effective_user.id
+    c = bot.db()
+    total = c.execute("SELECT COUNT(*) FROM history WHERE user_id=?", (uid,)).fetchone()[0]
+    ok = c.execute("SELECT COUNT(*) FROM history WHERE user_id=? AND status='success'", (uid,)).fetchone()[0]
+    failed = c.execute("SELECT COUNT(*) FROM history WHERE user_id=? AND status='failed'", (uid,)).fetchone()[0]
+    size = c.execute("SELECT COALESCE(SUM(size),0) FROM history WHERE user_id=?", (uid,)).fetchone()[0]
+    c.close()
+    await update.effective_message.reply_text(f"📈 Personal statistics\nTotal: {total}\nSuccessful: {ok}\nFailed: {failed}\nData: {bot.size_text(size)}")
+
+async def cleanup_cmd(update, context):
+    if update.effective_user.id not in bot.ADMIN_USER_IDS:
+        return await update.effective_message.reply_text("❌ Admin only.")
+    removed = 0
+    for p in bot.DOWNLOAD_DIR.iterdir():
+        if p.is_file() and time.time() - p.stat().st_mtime > 3600:
+            try: p.unlink(); removed += 1
+            except OSError: pass
+    await update.effective_message.reply_text(f"🧹 Removed {removed} stale files.")
+
+async def announce_cmd(update, context):
+    if update.effective_user.id not in bot.ADMIN_USER_IDS:
+        return await update.effective_message.reply_text("❌ Admin only.")
+    msg = " ".join(context.args).strip()
+    if not msg: return await update.effective_message.reply_text("Usage: /announce <message>")
+    c = bot.db(); users = [r[0] for r in c.execute("SELECT user_id FROM users").fetchall()]
+    c.execute("INSERT INTO announcements(message,created_at) VALUES(?,?)", (msg, int(time.time())))
+    c.commit(); c.close(); sent = 0
+    for uid in users:
+        try: await context.bot.send_message(uid, "📣 " + msg); sent += 1
+        except Exception: pass
+    await update.effective_message.reply_text(f"📣 Announcement sent to {sent}/{len(users)} users.")
+
+async def version_cmd(update, context):
+    base = Path("VERSION").read_text().strip() if Path("VERSION").exists() else "dev"
+    await update.effective_message.reply_text(f"🤖 Telegram Video Downloader\nBase release: v{base}\nRunner features: v{FEATURE_VERSION}\nStatus: Testing/Beta")
+
+def main():
+    if not bot.BOT_TOKEN: raise SystemExit("BOT_TOKEN is not set")
+    bot.db()
+    app = bot.Application.builder().token(bot.BOT_TOKEN).build()
+    commands = {
+        "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
+        "status": bot.status_cmd, "queue": queue_cmd, "pause": pause_cmd, "resume": resume_cmd,
+        "cancel": bot.cancel_cmd, "analyze": analyze_cmd, "quality": bot.quality_cmd,
+        "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
+        "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
+        "stats": stats_cmd, "version": version_cmd, "admin": bot.admin_cmd,
+        "cleanup": cleanup_cmd, "announce": announce_cmd,
+    }
+    for name, fn in commands.items(): app.add_handler(bot.CommandHandler(name, fn))
+    app.add_handler(bot.CallbackQueryHandler(bot.callback, pattern=r"^(menu|set|q)\|"))
+    app.add_handler(bot.MessageHandler(bot.filters.TEXT & ~bot.filters.COMMAND, bot.handle_message))
+    if bot.WEBHOOK_URL:
+        app.run_webhook(listen="0.0.0.0", port=bot.PORT, url_path="telegram",
+                        webhook_url=f"{bot.WEBHOOK_URL.rstrip('/')}/telegram",
+                        secret_token=bot.WEBHOOK_SECRET or None, drop_pending_updates=True,
+                        allowed_updates=bot.Update.ALL_TYPES, max_connections=20)
+    else:
+        app.run_polling(allowed_updates=bot.Update.ALL_TYPES, drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
