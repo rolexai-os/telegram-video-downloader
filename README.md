@@ -4,6 +4,10 @@
 
 A self-hosted Telegram media downloader built with Python, python-telegram-bot, yt-dlp, and FFmpeg.
 
+## v1.4.1 feature update
+
+This patch keeps raw yt-dlp/HTTP/authentication errors out of Telegram user messages. Full technical exceptions remain in server logs for debugging. Links that require authentication are reported as skipped; the bot does not bypass authentication.
+
 ## v1.4 feature update
 
 This release connects the roadmap features that can safely run in the existing single-process architecture:
@@ -193,4 +197,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.4.0**
+**Testing / Beta — v1.4.1**
