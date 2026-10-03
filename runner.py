@@ -216,7 +216,11 @@ def main():
     app.add_handler(bot.CallbackQueryHandler(admin_panel.panel_callback, pattern=admin_panel.PANEL_PATTERN))
     app.add_handler(bot.CallbackQueryHandler(bot.callback, pattern=r"^(menu|set|q)\|"))
     app.add_handler(bot.MessageHandler(bot.filters.TEXT & ~bot.filters.COMMAND, bot.handle_message))
-    if bot.WEBHOOK_URL:
+    # Render/Docker web services already have web.py binding the public PORT.
+    # Do not let PTB start a second HTTP listener on the same port.
+    # When WEBHOOK_URL is configured, use PTB's webhook *request handling*
+    # against the externally managed web process only when explicitly enabled.
+    if bot.WEBHOOK_URL and os.getenv("PTB_MANAGED_WEBHOOK", "0").lower() in {"1", "true", "yes", "on"}:
         app.run_webhook(listen="0.0.0.0", port=bot.PORT, url_path="telegram",
                         webhook_url=f"{bot.WEBHOOK_URL.rstrip('/')}/telegram",
                         secret_token=bot.WEBHOOK_SECRET or None, drop_pending_updates=True,
