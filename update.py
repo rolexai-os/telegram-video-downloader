@@ -41,6 +41,10 @@ def main():
         if src.is_file():
             shutil.copy2(src, backup / name)
 
+    cookie_dir = ROOT / os.getenv("COOKIES_DIR", "cookies")
+    if cookie_dir.is_dir():
+        shutil.copytree(cookie_dir, backup / "cookies", dirs_exist_ok=True)
+
     dirty = subprocess.run(["git", "diff", "--quiet"], cwd=ROOT).returncode != 0
     cached = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0
     if dirty or cached:
@@ -54,6 +58,12 @@ def main():
         saved = backup / name
         if saved.is_file() and not (ROOT / name).exists():
             shutil.copy2(saved, ROOT / name)
+
+    saved_cookie_dir = backup / "cookies"
+    if saved_cookie_dir.is_dir():
+        target_cookie_dir = ROOT / os.getenv("COOKIES_DIR", "cookies")
+        target_cookie_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(saved_cookie_dir, target_cookie_dir, dirs_exist_ok=True)
 
     pip = ROOT / ".venv" / "bin" / "pip"
     if pip.exists():
