@@ -9,5 +9,7 @@ downloads/
 *.log
 .DS_Store
 
-cookies/
+# Keep the cookie-folder guide, never commit real cookie jars.
+cookies/*
+!cookies/README.md
 .update-backup-*/
