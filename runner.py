@@ -36,7 +36,7 @@ def classify_error(exc):
             return message
     return "Download failed. Check the URL and bot logs."
 
-def download_options(template, audio, hook, attempt, profile="best", captions=False):
+def download_options(template, audio, hook, attempt, profile="best", captions=False, url=""):
     o = {
         "format": "bestaudio/best" if audio else bot.format_for_quality(profile),
         "outtmpl": template, "merge_output_format": "mp4", "noplaylist": True,
@@ -67,7 +67,7 @@ def robust_sync_download(url, audio_only=False, progress_hook=None, profile="bes
     last = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            with yt_dlp.YoutubeDL(download_options(template, audio_only, progress_hook, attempt, profile, captions)) as ydl:
+            with yt_dlp.YoutubeDL(download_options(template, audio_only, progress_hook, attempt, profile, captions, url)) as ydl:
                 info = ydl.extract_info(url, download=True)
                 if info and info.get("entries"):
                     info = next((x for x in info["entries"] if x), None)
