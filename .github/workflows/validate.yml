@@ -16,13 +16,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python files
-        run: python -m compileall -q bot.py runner.py web.py update.py
+        run: python -m compileall -q bot.py runner.py admin_panel.py web.py update.py
       - name: Import and entrypoint smoke test
         run: |
           python - <<'PY'
           import inspect
           import bot
           import runner
+          import admin_panel
           assert callable(bot.main)
           assert callable(bot.download)
           assert bot.cookie_platform("https://www.instagram.com/stories/example/") == "instagram"
@@ -38,6 +39,8 @@ jobs:
           assert callable(runner.pause_cmd)
           assert callable(runner.resume_cmd)
           assert callable(runner.stats_cmd)
+          assert callable(runner.admin_panel.panel_cmd)
+          assert callable(runner.admin_panel.panel_callback)
           print("application/runner wiring OK")
           PY
       - name: Check release wiring
@@ -57,4 +60,6 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.5.0"
+          test "$(cat VERSION)" = "1.6.0"
+          test -f admin_panel.py
+          test -f cookies/README.md
