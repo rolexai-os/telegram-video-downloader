@@ -4,6 +4,20 @@
 
 A self-hosted Telegram media downloader built with Python, python-telegram-bot, yt-dlp, and FFmpeg.
 
+## v1.6.0 feature update
+
+### Powerful Telegram admin panel
+- `/panel` opens a protected inline admin control panel.
+- Overview: users, history, success/failure totals, free disk, FFmpeg and yt-dlp.
+- Users: recent Telegram user IDs and last-seen timestamps.
+- Jobs: active jobs, per-user queue visibility and global concurrency.
+- Storage: download/database/cookie paths, file counts and disk usage.
+- Cookies: per-platform cookie-file presence and size without exposing cookie values.
+- Cleanup: one-tap removal of stale download files older than 1 hour.
+- Broadcast help: guided `/announce` access.
+- System: release, Python, PID, paths, limits and runtime information.
+- No public admin HTTP endpoint is exposed.
+
 ## v1.5.0 feature update
 
 ### Per-platform authorized cookies
@@ -87,9 +101,9 @@ This release connects the roadmap features that can safely run in the existing s
 | /cancel | Cancel active jobs |
 | /version | Release/version information |
 | /terms | Beta/legal-use notice |
-| /admin | Admin dashboard |
+| /admin | Basic admin dashboard |\n| /panel | Powerful inline admin control panel |
 
-Admin-only commands include /cleanup and /announce <message>. Set ADMIN_USER_IDS first.
+Admin-only commands include `/panel`, `/cleanup` and `/announce <message>`. Set `ADMIN_USER_IDS` first. The panel is Telegram-native and restricted by numeric Telegram user ID.
 
 ## Configuration
 
@@ -155,6 +169,21 @@ nano .env
 python runner.py
 ~~~
 
+## Cookie files: where to place them
+
+The tracked `cookies/README.md` contains the full folder layout. In a normal checkout, put authorized cookie jars here:
+
+~~~text
+cookies/youtube.txt
+cookies/instagram.txt
+cookies/facebook.txt
+cookies/tiktok.txt
+cookies/x.txt
+cookies/reddit.txt
+~~~
+
+Continue the same naming pattern for the other supported platforms. The bot automatically selects the matching file. Real cookie files are ignored by Git and must never be committed or sent through Telegram. For a custom location, set `COOKIES_<PLATFORM>` in `.env`.
+
 ## Existing-user update
 
 ~~~bash
@@ -212,4 +241,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.5.0**
+**Testing / Beta — v1.6.0**
