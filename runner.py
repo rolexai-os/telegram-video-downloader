@@ -12,7 +12,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.4.0"
+FEATURE_VERSION = "1.5.0"
 
 def error_text(exc):
     return " ".join(str(exc).replace("\n"," ").split())[:1000]
@@ -53,8 +53,9 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
         o.update(writesubtitles=True, writeautomaticsub=True,
                  subtitleslangs=["all"], subtitlesformat="srt/vtt/best")
     if hook: o["progress_hooks"] = [hook]
-    if bot.COOKIES_FILE and Path(bot.COOKIES_FILE).is_file():
-        o["cookiefile"] = bot.COOKIES_FILE
+    cookie_file = bot.cookie_file_for_url(url)
+    if cookie_file:
+        o["cookiefile"] = str(cookie_file)
     if FORCE_IPV4 or attempt >= 2: o["source_address"] = "0.0.0.0"
     ua = USER_AGENT or (DEFAULT_UA if attempt >= 2 else "")
     if ua: o["http_headers"] = {"User-Agent": ua}
@@ -103,8 +104,9 @@ async def analyze_cmd(update, context):
         def inspect():
             opts = {"quiet": True, "no_warnings": True, "skip_download": True,
                     "noplaylist": True, "socket_timeout": 20}
-            if bot.COOKIES_FILE and Path(bot.COOKIES_FILE).is_file():
-                opts["cookiefile"] = bot.COOKIES_FILE
+            cookie_file = bot.cookie_file_for_url(url)
+            if cookie_file:
+                opts["cookiefile"] = str(cookie_file)
             with yt_dlp.YoutubeDL(opts) as y: return y.extract_info(url, download=False)
         info = await asyncio.to_thread(inspect)
         formats = info.get("formats", []) if info else []
