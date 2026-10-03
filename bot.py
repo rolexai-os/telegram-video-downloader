@@ -9,6 +9,7 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yt_dlp
 from dotenv import load_dotenv
@@ -29,6 +30,8 @@ PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
 COOKIES_FILE=os.getenv("COOKIES_FILE","").strip()
+COOKIES_DIR=Path(os.getenv("COOKIES_DIR","cookies"))
+PLATFORM_COOKIE_ENV={"youtube":"COOKIES_YOUTUBE","instagram":"COOKIES_INSTAGRAM","facebook":"COOKIES_FACEBOOK","tiktok":"COOKIES_TIKTOK","x":"COOKIES_X","reddit":"COOKIES_REDDIT","vimeo":"COOKIES_VIMEO","dailymotion":"COOKIES_DAILYMOTION","snapchat":"COOKIES_SNAPCHAT","pinterest":"COOKIES_PINTEREST","linkedin":"COOKIES_LINKEDIN","twitch":"COOKIES_TWITCH","threads":"COOKIES_THREADS","telegram":"COOKIES_TELEGRAM","generic":"COOKIES_GENERIC"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
@@ -96,6 +99,22 @@ def user_error_message(exc):
         return "⚠️ This file is larger than the bot's upload limit."
     return "⚠️ This link could not be downloaded."
 
+def cookie_platform(url):
+    host=urlparse(url).netloc.lower().split(":")[0]
+    if host.startswith("www."): host=host[4:]
+    mapping={"youtube.com":"youtube","youtu.be":"youtube","instagram.com":"instagram","facebook.com":"facebook","fb.watch":"facebook","tiktok.com":"tiktok","x.com":"x","twitter.com":"x","reddit.com":"reddit","v.redd.it":"reddit","vimeo.com":"vimeo","dailymotion.com":"dailymotion","snapchat.com":"snapchat","pinterest.com":"pinterest","linkedin.com":"linkedin","twitch.tv":"twitch","threads.net":"threads","telegram.me":"telegram","t.me":"telegram"}
+    return mapping.get(host,"generic")
+
+def cookie_file_for_url(url):
+    platform=cookie_platform(url)
+    configured=os.getenv(PLATFORM_COOKIE_ENV.get(platform,"COOKIES_GENERIC"),"").strip()
+    candidates=[]
+    if configured: candidates.append(Path(configured))
+    candidates.append(COOKIES_DIR / f"{platform}.txt")
+    if platform=="x": candidates.append(COOKIES_DIR / "twitter.txt")
+    if COOKIES_FILE: candidates.append(Path(COOKIES_FILE))
+    return next((p for p in candidates if p.is_file()),None)
+
 def size_text(n):
     if not n:return "unknown"
     for u in ("B","KB","MB","GB"):
@@ -110,12 +129,13 @@ def fmt(profile):
     return "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4]/b"
 
 
-def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=False):
+def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=False,url=""):
     o={"format":"bestaudio/best" if audio else fmt(profile),"outtmpl":template,"merge_output_format":"mp4","noplaylist":not playlist,"quiet":True,"no_warnings":False,"retries":5,"fragment_retries":5,"file_access_retries":3,"extractor_retries":3,"socket_timeout":30,"continuedl":True,"overwrites":False,"restrictfilenames":False,"windowsfilenames":True,"concurrent_fragment_downloads":2}
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
-    if COOKIES_FILE and Path(COOKIES_FILE).is_file():o["cookiefile"]=COOKIES_FILE
+    cookie_file=cookie_file_for_url(url) if url else None
+    if cookie_file:o["cookiefile"]=str(cookie_file)
     return o
 
 
@@ -129,7 +149,7 @@ def locate(ydl,info,audio=False):
 
 def sync_download(url,audio=False,hook=None,profile="best",captions=False):
     ext="mp3" if audio else "%(ext)s"; template=str(DOWNLOAD_DIR/f"%(title).180B [%(id)s].{ext}")
-    with yt_dlp.YoutubeDL(opts(template,audio,profile,captions,hook)) as y:
+    with yt_dlp.YoutubeDL(opts(template,audio,profile,captions,hook,url=url)) as y:
         info=y.extract_info(url,download=True); info=next((x for x in info.get("entries",[]) if x),None) if info and info.get("entries") else info
         return locate(y,info,audio)
 
@@ -251,7 +271,8 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
 async def inspect_formats(url):
     def run():
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
-        if COOKIES_FILE and Path(COOKIES_FILE).is_file():o["cookiefile"]=COOKIES_FILE
+        cookie_file=cookie_file_for_url(url)
+        if cookie_file:o["cookiefile"]=str(cookie_file)
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
     return await asyncio.to_thread(run)
 
