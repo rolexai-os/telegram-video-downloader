@@ -199,7 +199,7 @@ For existing users, do not replace your .env with .env.example; copy new variabl
 
 ## Render
 
-For cookies on the Docker-based Render deployment, use Render **Secret Files**, not GitHub. Render makes service secret files available at runtime under `/etc/secrets/<filename>`. citeturn0search0turn0search2
+For cookies on the Docker-based Render deployment, use Render **Secret Files**, not GitHub. Render makes service secret files available at runtime under `/etc/secrets/<filename>`.
 
 Recommended setup:
 
@@ -209,7 +209,7 @@ Recommended setup:
 4. Save/deploy. The bot will detect the matching cookie file automatically.
 5. Check **/panel → 🍪 Cookies** to see presence and file size only; cookie values are never shown.
 
-Render documents a 1 MB combined limit for secret files on a service/environment group, so keep only the cookie jars you actually need. citeturn0search0
+Render documents a 1 MB combined limit for secret files on a service/environment group, so keep only the cookie jars you actually need.
 
 Connect the main branch to Render and add BOT_TOKEN as a secret environment variable. Auto-deploy can deploy new commits from main.
 
