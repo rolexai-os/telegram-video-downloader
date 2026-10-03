@@ -25,3 +25,35 @@ services:
         value: "2"
       - key: ADMIN_USER_IDS
         value: ""
+      # Render Secret Files are mounted at /etc/secrets/<filename>.
+      # Upload only authorized cookie jars in the Render Dashboard.
+      - key: COOKIES_YOUTUBE
+        value: /etc/secrets/youtube.txt
+      - key: COOKIES_INSTAGRAM
+        value: /etc/secrets/instagram.txt
+      - key: COOKIES_FACEBOOK
+        value: /etc/secrets/facebook.txt
+      - key: COOKIES_TIKTOK
+        value: /etc/secrets/tiktok.txt
+      - key: COOKIES_X
+        value: /etc/secrets/x.txt
+      - key: COOKIES_REDDIT
+        value: /etc/secrets/reddit.txt
+      - key: COOKIES_VIMEO
+        value: /etc/secrets/vimeo.txt
+      - key: COOKIES_DAILYMOTION
+        value: /etc/secrets/dailymotion.txt
+      - key: COOKIES_SNAPCHAT
+        value: /etc/secrets/snapchat.txt
+      - key: COOKIES_PINTEREST
+        value: /etc/secrets/pinterest.txt
+      - key: COOKIES_LINKEDIN
+        value: /etc/secrets/linkedin.txt
+      - key: COOKIES_TWITCH
+        value: /etc/secrets/twitch.txt
+      - key: COOKIES_THREADS
+        value: /etc/secrets/threads.txt
+      - key: COOKIES_TELEGRAM
+        value: /etc/secrets/telegram.txt
+      - key: COOKIES_GENERIC
+        value: /etc/secrets/generic.txt
