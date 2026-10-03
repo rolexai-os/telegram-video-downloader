@@ -8,3 +8,6 @@ venv/
 downloads/
 *.log
 .DS_Store
+
+cookies/
+.update-backup-*/
