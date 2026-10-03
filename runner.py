@@ -4,6 +4,7 @@ import asyncio, logging, os, random, time
 from pathlib import Path
 import yt_dlp
 import bot
+import admin_panel
 
 log = logging.getLogger("telegram-video-downloader.runner")
 MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
@@ -12,7 +13,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.5.0"
+FEATURE_VERSION = "1.6.0"
 
 def error_text(exc):
     return " ".join(str(exc).replace("\n"," ").split())[:1000]
@@ -212,6 +213,7 @@ def main():
         "cleanup": cleanup_cmd, "announce": announce_cmd,
     }
     for name, fn in commands.items(): app.add_handler(bot.CommandHandler(name, fn))
+    app.add_handler(bot.CallbackQueryHandler(admin_panel.panel_callback, pattern=admin_panel.PANEL_PATTERN))
     app.add_handler(bot.CallbackQueryHandler(bot.callback, pattern=r"^(menu|set|q)\|"))
     app.add_handler(bot.MessageHandler(bot.filters.TEXT & ~bot.filters.COMMAND, bot.handle_message))
     if bot.WEBHOOK_URL:
