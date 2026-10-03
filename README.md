@@ -4,6 +4,17 @@
 
 A self-hosted Telegram media downloader built with Python, python-telegram-bot, yt-dlp, and FFmpeg.
 
+## v1.5.0 feature update
+
+### Per-platform authorized cookies
+- Separate cookie jars for YouTube, Instagram, Facebook, TikTok, X/Twitter, Reddit, Vimeo, Dailymotion, Snapchat, Pinterest, LinkedIn, Twitch, Threads and Telegram.
+- Automatic platform detection selects only the matching cookie jar.
+- Custom COOKIES_<PLATFORM> environment variables can override cookies/<platform>.txt.
+- Legacy COOKIES_FILE remains available as a fallback.
+- Authenticated stories/restricted media can work when yt-dlp supports the extractor and the operator provides valid, authorized cookies.
+- Cookie files stay local and are excluded from Git.
+- Authentication/access controls are not bypassed.
+
 ## v1.4.1 feature update
 
 This patch keeps raw yt-dlp/HTTP/authentication errors out of Telegram user messages. Full technical exceptions remain in server logs for debugging. Links that require authentication are reported as skipped; the bot does not bypass authentication.
@@ -103,7 +114,11 @@ DEFAULT_AUDIO_QUALITY=192
 
 # Optional
 ADMIN_USER_IDS=123456789
-COOKIES_FILE=/absolute/path/to/cookies.txt
+
+COOKIES_DIR=cookies
+# Optional explicit override:
+# COOKIES_INSTAGRAM=/secure/path/instagram.txt
+# COOKIES_YOUTUBE=/secure/path/youtube.txt
 
 YTDLP_MAX_ATTEMPTS=3
 YTDLP_RETRY_DELAY=2
@@ -149,7 +164,7 @@ bash update.sh
 python update.py
 ~~~
 
-The updater preserves .env and authorized local cookies, installs current dependencies, and updates the checked-out release. **Restart the bot after updating.**
+The updater preserves .env and the entire local authorized cookies/ directory, installs current dependencies, and updates the checked-out release. **Restart the bot after updating.**
 
 For existing users, do not replace your .env with .env.example; copy new variables manually when required.
 
@@ -197,4 +212,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.4.1**
+**Testing / Beta — v1.5.0**
