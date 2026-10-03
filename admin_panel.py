@@ -40,12 +40,16 @@ def _back():
 def _cookie_report():
     rows = []
     for platform in sorted(bot.PLATFORM_COOKIE_ENV):
-        p = bot.cookie_file_for_url(f"https://{platform}.example/") if platform != "generic" else None
-        # The generic entry is resolved through the configured generic path.
-        if platform == "generic":
-            configured = os.getenv("COOKIES_GENERIC", "").strip()
-            p = Path(configured) if configured else bot.COOKIES_DIR / "generic.txt"
-            p = p if p.is_file() else None
+        configured = os.getenv(bot.PLATFORM_COOKIE_ENV[platform], "").strip()
+        candidates = []
+        if configured:
+            candidates.append(Path(configured))
+        candidates.append(bot.COOKIES_DIR / f"{platform}.txt")
+        if platform == "x":
+            candidates.append(bot.COOKIES_DIR / "twitter.txt")
+        if bot.COOKIES_FILE:
+            candidates.append(Path(bot.COOKIES_FILE))
+        p = next((x for x in candidates if x.is_file()), None)
         if p and p.is_file():
             rows.append(f"✅ {platform}: {p.name} ({_size(p.stat().st_size)})")
         else:
