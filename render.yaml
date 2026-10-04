@@ -39,6 +39,10 @@ services:
         value: ""
       # Render Secret Files are mounted at /etc/secrets/<filename>.
       # Upload only authorized cookie jars in the Render Dashboard.
+      - key: COOKIES_YOUTUBE
+        value: /etc/secrets/youtube.txt
+      - key: COOKIES_INSTAGRAM
+        value: /etc/secrets/instagram.txt
       - key: COOKIES_FACEBOOK
         value: /etc/secrets/facebook.txt
       - key: COOKIES_TIKTOK
