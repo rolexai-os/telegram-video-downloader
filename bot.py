@@ -67,6 +67,16 @@ def is_disabled_url(url):
 def ensure_supported_url(url):
     if is_disabled_url(url):
         raise ValueError("This platform is disabled in the current bot release")
+DISABLED_HOSTS=("youtube.com","youtu.be","youtube-nocookie.com","instagram.com","instagr.am")
+
+def is_disabled_url(url):
+    host=urlparse(url).netloc.lower().split(":")[0]
+    if host.startswith("www."): host=host[4:]
+    return any(host==suffix or host.endswith("."+suffix) for suffix in DISABLED_HOSTS)
+
+def ensure_supported_url(url):
+    if is_disabled_url(url):
+        raise ValueError("This platform is disabled in the current bot release")
 
 def extract_message_urls(message):
     """Extract visible and Telegram-embedded URLs from text or media captions."""
@@ -197,6 +207,8 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
+    if "disabled in the current bot release" in s:
+        return "⚠️ This platform is currently disabled in this bot version."
     if "disabled in the current bot release" in s:
         return "⚠️ This platform is currently disabled in this bot version."
     if "unsupported url" in s:
