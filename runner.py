@@ -22,7 +22,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.11.0"
+FEATURE_VERSION = "1.11.2"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -226,7 +226,7 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
     if hook: o["progress_hooks"] = [hook]
     # Full YouTube extraction now depends on EJS plus a supported JS runtime.
     if YTDLP_JS_RUNTIME:
-        o["js_runtimes"] = YTDLP_JS_RUNTIME
+        o["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
     if YTDLP_REMOTE_COMPONENTS:
         o["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     cookie_file = bot.cookie_file_for_url(url)
@@ -349,7 +349,7 @@ async def analyze_cmd(update, context):
             opts = {"quiet": True, "no_warnings": True, "skip_download": True,
                     "noplaylist": True, "socket_timeout": 20}
             if YTDLP_JS_RUNTIME:
-                opts["js_runtimes"] = YTDLP_JS_RUNTIME
+                opts["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
             if YTDLP_REMOTE_COMPONENTS:
                 opts["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
             cookie_file = bot.cookie_file_for_url(url)
