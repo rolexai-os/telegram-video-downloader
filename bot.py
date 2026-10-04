@@ -5,6 +5,8 @@ import logging
 import os
 import re
 import shutil
+import subprocess
+import tempfile
 import sqlite3
 import socket
 import time
@@ -28,7 +30,11 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
-MAX_FILE_SIZE_MB=max(1,int(os.getenv("MAX_FILE_SIZE_MB","49"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024
+MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
+TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
+STORAGE_QUOTA_GB=max(0,float(os.getenv("STORAGE_QUOTA_GB","0")))
+KEEP_MEDIA=os.getenv("KEEP_MEDIA","0").lower() in {"1","true","yes","on"}
+STORAGE_BACKEND=os.getenv("STORAGE_BACKEND","local").strip().lower()
 MAX_CONCURRENT_DOWNLOADS=max(1,int(os.getenv("MAX_CONCURRENT_DOWNLOADS","2")))
 MAX_LINKS_PER_MESSAGE=max(0,int(os.getenv("MAX_LINKS_PER_MESSAGE","0")))
 MAX_QUEUE_PER_USER=max(0,int(os.getenv("MAX_QUEUE_PER_USER","0")))
@@ -51,7 +57,8 @@ LANG={"en":"🎬 Social Media Downloader","ml":"🎬 സോഷ്യൽ മീ�
 
 
 def db():
-    c=sqlite3.connect(DB_FILE); c.execute("PRAGMA journal_mode=WAL")
+    c=sqlite3.connect(DB_FILE, timeout=30)
+    c.execute("PRAGMA busy_timeout=30000"); c.execute("PRAGMA journal_mode=WAL")
     c.execute("CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,username TEXT DEFAULT '',first_name TEXT DEFAULT '',last_name TEXT DEFAULT '',language TEXT DEFAULT 'en',quality TEXT DEFAULT 'best',audio INTEGER DEFAULT 0,captions INTEGER DEFAULT 0,created_at INTEGER,last_seen INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,url TEXT,title TEXT,status TEXT,size INTEGER DEFAULT 0,created_at INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS favorites(user_id INTEGER,url TEXT,title TEXT,created_at INTEGER,PRIMARY KEY(user_id,url))")
@@ -105,9 +112,15 @@ def touch_update(update):
     if not user:return
     touch(user.id,user)
     message=getattr(update,"effective_message",None)
-    if message and getattr(message,"text",None):
-        urls=[clean_url(x) for x in URL_RE.findall(message.text)]
-        audit_event(user,"message",urls[0] if len(urls)==1 else "",f"links={len(urls)}")
+    text_value=getattr(message,"text",None) or getattr(message,"caption",None) or ""
+    urls=[clean_url(x) for x in URL_RE.findall(text_value)]
+    if urls:
+        event="command" if text_value.lstrip().startswith("/") else "link_received"
+        audit_event(user,event,urls[0] if len(urls)==1 else "",f"links={len(urls)}")
+    elif getattr(update,"callback_query",None):
+        audit_event(user,"button",details=f"callback={getattr(update.callback_query,'data','')[:120]}")
+    else:
+        audit_event(user,"message",details=f"type={type(update).__name__}")
 
 
 def settings(uid):
@@ -227,7 +240,17 @@ async def start(update,context):
     await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported URLs. Use /quality <URL> for interactive quality selection.",reply_markup=main_keyboard())
 
 async def help_cmd(update,context):
-    await update.effective_message.reply_text("📖 Commands\n/start /help /quality <URL> /mp3 <URL> /subs <URL> /playlist <URL> /settings /history /favorites /status /cancel /terms /admin")
+    await update.effective_message.reply_text(
+        "📖 Commands\n"
+        "/start — open bot menu\n/help — command help\n"
+        "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
+        "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch\n"
+        "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
+        "/settings /history /favorites /stats /version /terms\n"
+        "/admin or /panel — admin dashboard\n"
+        "/cleanup /announce — admin tools\n\n"
+        "Long videos have no application duration cap; media above Telegram's upload size is automatically split into parts."
+    )
 
 async def terms_cmd(update,context):
     await update.effective_message.reply_text("⚖️ Testing/Beta project. Download only content you own or are legally permitted to access. Do not bypass DRM, authentication, access controls, paywalls or platform rules. You are responsible for your use.")
@@ -293,6 +316,41 @@ def progress_hook(loop,status_message,url):
         asyncio.run_coroutine_threadsafe(edit(),loop)
     return hook
 
+async def _send_single_media(message, path, audio=False, caption=""):
+    with path.open("rb") as fh:
+        if audio:
+            await message.reply_audio(audio=InputFile(fh,filename=path.name),caption=caption[:1024] if caption else None)
+        else:
+            await message.reply_video(video=InputFile(fh,filename=path.name),
+                                      caption=caption[:1024] if caption else None,
+                                      supports_streaming=True)
+
+
+async def send_media(message, path, audio=False, caption=""):
+    """Send large media by using normal Telegram upload or FFmpeg chunks."""
+    if path.stat().st_size <= TELEGRAM_UPLOAD_CHUNK_SIZE:
+        await _send_single_media(message,path,audio,caption)
+        return 1
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError(f"Media is {size_text(path.stat().st_size)}; FFmpeg is required to split large files.")
+    suffix=".mp3" if audio else ".mp4"
+    work=Path(tempfile.mkdtemp(prefix="tvd-parts-",dir=DOWNLOAD_DIR))
+    pattern=str(work / ("part-%03d"+suffix))
+    try:
+        cmd=["ffmpeg","-hide_banner","-loglevel","error","-i",str(path),"-map","0","-c","copy",
+             "-f","segment","-segment_time","600","-reset_timestamps","1",
+             "-fs",str(TELEGRAM_UPLOAD_CHUNK_SIZE-1024*1024),pattern]
+        proc=await asyncio.to_thread(subprocess.run,cmd,capture_output=True,text=True)
+        parts=sorted(work.glob("part-*"+suffix))
+        if proc.returncode!=0 or not parts:
+            raise RuntimeError("FFmpeg could not split the large media file")
+        for index,part in enumerate(parts,1):
+            await _send_single_media(message,part,audio,f"{caption} • Part {index}/{len(parts)}")
+        return len(parts)
+    finally:
+        shutil.rmtree(work,ignore_errors=True)
+
+
 async def process_one(message,context,uid,url,audio=False,profile="best",captions=False):
     task=asyncio.current_task()
     if not await register(uid,task):await message.reply_text("❌ Your queue is full.");return
@@ -302,11 +360,9 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
         file_path=await download(url,audio,hook,profile,captions)
         if not file_path or not file_path.exists():raise RuntimeError("No media file was produced")
         n=file_path.stat().st_size
-        if n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above the configured {MAX_FILE_SIZE_MB} MB limit")
+        if MAX_FILE_SIZE and n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above the configured {MAX_FILE_SIZE_MB} MB limit")
         await status.edit_text("📤 Uploading…");await context.bot.send_chat_action(message.chat_id,ChatAction.UPLOAD_VIDEO)
-        with file_path.open("rb") as fh:
-            if audio:await message.reply_audio(audio=InputFile(fh,filename=file_path.name))
-            else:await message.reply_video(video=InputFile(fh,filename=file_path.name),caption=f"✅ {file_path.stem}"[:1024],supports_streaming=True)
+        await send_media(message,file_path,audio,f"✅ {file_path.stem}")
         history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(message.from_user,"download_success",url,file_path.stem)
         try:await status.delete()
         except Exception:pass
@@ -319,7 +375,7 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
         try:await status.edit_text(user_error_message(exc))
         except Exception:pass
     finally:
-        if file_path and file_path.exists():
+        if file_path and file_path.exists() and not KEEP_MEDIA:
             try:file_path.unlink()
             except OSError:pass
         await unregister(uid,task)
@@ -363,9 +419,7 @@ async def quality_callback(update,context):
         n=file_path.stat().st_size
         if n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above {MAX_FILE_SIZE_MB} MB")
         history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem);await q.edit_message_text("📤 Uploading…")
-        with file_path.open("rb") as fh:
-            if audio:await q.message.reply_audio(audio=InputFile(fh,filename=file_path.name))
-            else:await q.message.reply_video(video=InputFile(fh,filename=file_path.name),caption=f"✅ {file_path.stem}"[:1024],supports_streaming=True)
+        await send_media(q.message,file_path,audio,f"✅ {file_path.stem}")
     except asyncio.CancelledError:history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url);await q.edit_message_text("🛑 Cancelled.")
     except Exception as exc:
         history(uid,url,"","failed");audit_event(q.from_user,"download_failed",url,user_error_message(exc));logger.exception("quality download failed")
