@@ -32,6 +32,8 @@ SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'teleg
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
 COOKIES_FROM_BROWSER=os.getenv("COOKIES_FROM_BROWSER","").strip()
 COOKIES_FROM_BROWSER_PROFILE=os.getenv("COOKIES_FROM_BROWSER_PROFILE","").strip()
+YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","deno").strip()
+YTDLP_REMOTE_COMPONENTS=os.getenv("YTDLP_REMOTE_COMPONENTS","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
 TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
 STORAGE_QUOTA_GB=max(0,float(os.getenv("STORAGE_QUOTA_GB","0")))
@@ -227,6 +229,8 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
+    if YTDLP_JS_RUNTIME:o["js_runtimes"]=YTDLP_JS_RUNTIME
+    if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     cookie_file=cookie_file_for_url(url) if url else None
     if cookie_file:
         o["cookiefile"]=str(cookie_file)
@@ -411,6 +415,8 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
 async def inspect_formats(url):
     def run():
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
+        if YTDLP_JS_RUNTIME:o["js_runtimes"]=YTDLP_JS_RUNTIME
+        if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
         cookie_file=cookie_file_for_url(url)
         if cookie_file:o["cookiefile"]=str(cookie_file)
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
