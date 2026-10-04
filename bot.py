@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import sqlite3
+import socket
 import time
 import uuid
 from pathlib import Path
@@ -21,6 +22,12 @@ load_dotenv()
 BOT_TOKEN=os.getenv("BOT_TOKEN","").strip()
 DOWNLOAD_DIR=Path(os.getenv("DOWNLOAD_DIR","downloads")); DOWNLOAD_DIR.mkdir(parents=True,exist_ok=True)
 DB_FILE=Path(os.getenv("DB_FILE","bot.db"))
+SERVER_KIND=os.getenv("SERVER_KIND","render" if os.getenv("RENDER_SERVICE_ID") else "local")
+SERVER_NAME=os.getenv("SERVER_NAME","").strip()
+SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.gethostname()
+SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
+SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
+LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
 MAX_FILE_SIZE_MB=max(1,int(os.getenv("MAX_FILE_SIZE_MB","49"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024
 MAX_CONCURRENT_DOWNLOADS=max(1,int(os.getenv("MAX_CONCURRENT_DOWNLOADS","2")))
 MAX_LINKS_PER_MESSAGE=max(0,int(os.getenv("MAX_LINKS_PER_MESSAGE","0")))
@@ -45,13 +52,62 @@ LANG={"en":"🎬 Social Media Downloader","ml":"🎬 സോഷ്യൽ മീ�
 
 def db():
     c=sqlite3.connect(DB_FILE); c.execute("PRAGMA journal_mode=WAL")
-    c.execute("CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,language TEXT DEFAULT 'en',quality TEXT DEFAULT 'best',audio INTEGER DEFAULT 0,captions INTEGER DEFAULT 0,created_at INTEGER,last_seen INTEGER)")
+    c.execute("CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,username TEXT DEFAULT '',first_name TEXT DEFAULT '',last_name TEXT DEFAULT '',language TEXT DEFAULT 'en',quality TEXT DEFAULT 'best',audio INTEGER DEFAULT 0,captions INTEGER DEFAULT 0,created_at INTEGER,last_seen INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,url TEXT,title TEXT,status TEXT,size INTEGER DEFAULT 0,created_at INTEGER)")
-    c.execute("CREATE TABLE IF NOT EXISTS favorites(user_id INTEGER,url TEXT,title TEXT,created_at INTEGER,PRIMARY KEY(user_id,url))"); c.commit(); return c
+    c.execute("CREATE TABLE IF NOT EXISTS favorites(user_id INTEGER,url TEXT,title TEXT,created_at INTEGER,PRIMARY KEY(user_id,url))")
+    c.execute("CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,username TEXT DEFAULT '',event TEXT,url TEXT DEFAULT '',details TEXT DEFAULT '',server_id TEXT DEFAULT '',created_at INTEGER)")
+    c.execute("CREATE TABLE IF NOT EXISTS servers(server_id TEXT PRIMARY KEY,kind TEXT,label TEXT,hostname TEXT,pid INTEGER,started_at INTEGER,last_seen INTEGER,status TEXT)")
+    for column, definition in (("username","TEXT DEFAULT ''"),("first_name","TEXT DEFAULT ''"),("last_name","TEXT DEFAULT ''")):
+        try: c.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError: pass
+    c.commit(); return c
 
 
-def touch(uid):
-    c=db(); now=int(time.time()); c.execute("INSERT INTO users(user_id,created_at,last_seen) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET last_seen=excluded.last_seen",(uid,now,now)); c.commit(); c.close()
+def touch(uid,user=None):
+    c=db(); now=int(time.time())
+    username=(getattr(user,"username","",None) or "") if user else ""
+    first_name=(getattr(user,"first_name","",None) or "") if user else ""
+    last_name=(getattr(user,"last_name","",None) or "") if user else ""
+    c.execute("""INSERT INTO users(user_id,username,first_name,last_name,created_at,last_seen)
+                 VALUES(?,?,?,?,?,?)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                 username=CASE WHEN excluded.username<>'' THEN excluded.username ELSE users.username END,
+                 first_name=CASE WHEN excluded.first_name<>'' THEN excluded.first_name ELSE users.first_name END,
+                 last_name=CASE WHEN excluded.last_name<>'' THEN excluded.last_name ELSE users.last_name END,
+                 last_seen=excluded.last_seen""",
+              (uid,username,first_name,last_name,now,now)); c.commit(); c.close()
+
+
+def audit_event(user,event,url="",details=""):
+    if not user:return
+    uid=getattr(user,"id",0) or 0
+    username=getattr(user,"username","",None) or ""
+    touch(uid,user)
+    if not LOG_URLS:url=""
+    c=db(); c.execute("INSERT INTO audit_logs(user_id,username,event,url,details,server_id,created_at) VALUES(?,?,?,?,?,?,?)",
+                      (uid,username,event,url,details,SERVER_ID,int(time.time()))); c.commit(); c.close()
+
+
+def server_heartbeat(status="online"):
+    now=int(time.time()); started=int(os.getenv("SERVER_STARTED_AT",str(now)))
+    os.environ.setdefault("SERVER_STARTED_AT",str(started))
+    c=db(); c.execute("""INSERT INTO servers(server_id,kind,label,hostname,pid,started_at,last_seen,status)
+                        VALUES(?,?,?,?,?,?,?,?)
+                        ON CONFLICT(server_id) DO UPDATE SET
+                        kind=excluded.kind,label=excluded.label,hostname=excluded.hostname,
+                        pid=excluded.pid,last_seen=excluded.last_seen,status=excluded.status""",
+                     (SERVER_ID,SERVER_KIND,SERVER_LABEL,SERVER_HOSTNAME,os.getpid(),started,now,status))
+    c.commit(); c.close()
+
+
+def touch_update(update):
+    user=getattr(update,"effective_user",None)
+    if not user:return
+    touch(user.id,user)
+    message=getattr(update,"effective_message",None)
+    if message and getattr(message,"text",None):
+        urls=[clean_url(x) for x in URL_RE.findall(message.text)]
+        audit_event(user,"message",urls[0] if len(urls)==1 else "",f"links={len(urls)}")
 
 
 def settings(uid):
@@ -251,15 +307,15 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
         with file_path.open("rb") as fh:
             if audio:await message.reply_audio(audio=InputFile(fh,filename=file_path.name))
             else:await message.reply_video(video=InputFile(fh,filename=file_path.name),caption=f"✅ {file_path.stem}"[:1024],supports_streaming=True)
-        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem)
+        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(message.from_user,"download_success",url,file_path.stem)
         try:await status.delete()
         except Exception:pass
     except asyncio.CancelledError:
-        history(uid,url,"","cancelled")
+        history(uid,url,"","cancelled");audit_event(message.from_user,"download_cancelled",url)
         try:await status.edit_text("🛑 Job cancelled.")
         except Exception:pass
     except Exception as exc:
-        history(uid,url,"","failed");logger.exception("download failed")
+        history(uid,url,"","failed");audit_event(message.from_user,"download_failed",url,user_error_message(exc));logger.exception("download failed")
         try:await status.edit_text(user_error_message(exc))
         except Exception:pass
     finally:
@@ -306,13 +362,13 @@ async def quality_callback(update,context):
         if not file_path or not file_path.exists():raise RuntimeError("No media file was produced")
         n=file_path.stat().st_size
         if n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above {MAX_FILE_SIZE_MB} MB")
-        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);await q.edit_message_text("📤 Uploading…")
+        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem);await q.edit_message_text("📤 Uploading…")
         with file_path.open("rb") as fh:
             if audio:await q.message.reply_audio(audio=InputFile(fh,filename=file_path.name))
             else:await q.message.reply_video(video=InputFile(fh,filename=file_path.name),caption=f"✅ {file_path.stem}"[:1024],supports_streaming=True)
-    except asyncio.CancelledError:history(uid,url,"","cancelled");await q.edit_message_text("🛑 Cancelled.")
+    except asyncio.CancelledError:history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url);await q.edit_message_text("🛑 Cancelled.")
     except Exception as exc:
-        history(uid,url,"","failed");logger.exception("quality download failed")
+        history(uid,url,"","failed");audit_event(q.from_user,"download_failed",url,user_error_message(exc));logger.exception("quality download failed")
         await q.edit_message_text(user_error_message(exc))
     finally:
         if file_path and file_path.exists():
