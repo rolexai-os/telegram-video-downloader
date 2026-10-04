@@ -192,7 +192,7 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
-        if "unsupported url" in s:
+    if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "ffmpeg" in s:
         return "⚠️ The bot could not process this media."
