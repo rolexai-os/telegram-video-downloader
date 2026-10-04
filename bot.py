@@ -50,7 +50,8 @@ PLATFORM_COOKIE_ENV={"youtube":"COOKIES_YOUTUBE","instagram":"COOKIES_INSTAGRAM"
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
-logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(message)s")
+LOG_FILE=Path(os.getenv("APP_LOG_FILE","bot.log"))
+logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(message)s",handlers=[logging.StreamHandler(),logging.FileHandler(LOG_FILE,encoding="utf-8")])
 logger=logging.getLogger("telegram-video-downloader")
 GLOBAL_SEMAPHORE=asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS); JOBS={}; LAST_REQUEST={}; QUALITY_REQUESTS={}; LOCK=asyncio.Lock()
 URL_RE=re.compile(r"https?://[^\s<>\"]+",re.I)
@@ -93,8 +94,11 @@ def audit_event(user,event,url="",details=""):
     username=getattr(user,"username","",None) or ""
     touch(uid,user)
     if not LOG_URLS:url=""
-    c=db(); c.execute("INSERT INTO audit_logs(user_id,username,event,url,details,server_id,created_at) VALUES(?,?,?,?,?,?,?)",
-                      (uid,username,event,url,details,SERVER_ID,int(time.time()))); c.commit(); c.close()
+    try:
+        c=db(); c.execute("INSERT INTO audit_logs(user_id,username,event,url,details,server_id,created_at) VALUES(?,?,?,?,?,?,?)",
+                          (uid,username,event,url,details,SERVER_ID,int(time.time()))); c.commit(); c.close()
+    except sqlite3.Error as exc:
+        logger.warning("audit database write failed: %s", exc)
 
 
 def server_heartbeat(status="online"):
