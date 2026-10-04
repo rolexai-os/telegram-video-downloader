@@ -1,5 +1,13 @@
 # Telegram Video Downloader
 
+## v1.7.1 reliability update
+
+### Telegram 409 conflict protection
+- Adds a Linux/Termux-compatible file lock so two local `runner.py` processes cannot poll the same bot token simultaneously.
+- Treats Telegram HTTP 409 `getUpdates` conflicts as an ownership problem rather than a generic unhandled update error.
+- Uses exit code 75 for a duplicate/foreign poller; the Render supervisor does not restart endlessly when that code is returned.
+- If the bot is running on Render, do not run the same bot token with `python runner.py` on Termux/another server at the same time.
+
 ## v1.7.0 reliability update
 
 ### Telegram API connection hardening
@@ -286,4 +294,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.7.0**
+**Testing / Beta — v1.7.1**
