@@ -6,6 +6,7 @@ from pathlib import Path
 import yt_dlp
 import bot
 import admin_panel
+from telegram import BotCommand, BotCommandScopeChat
 from telegram.error import Conflict, NetworkError, RetryAfter, TimedOut
 from telegram.ext import TypeHandler
 from telegram.request import HTTPXRequest
@@ -17,7 +18,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.7.1"
+FEATURE_VERSION = "1.9.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -117,8 +118,42 @@ async def telegram_watchdog(app):
             log.warning("Telegram watchdog: connection check failed: %s", error_text(exc))
 
 
+PUBLIC_COMMANDS = [
+    BotCommand("start","Open the bot menu"),
+    BotCommand("help","Show all commands"),
+    BotCommand("quality","Choose video quality"),
+    BotCommand("mp3","Download audio"),
+    BotCommand("subs","Download with subtitles"),
+    BotCommand("playlist","Download playlist/batch"),
+    BotCommand("analyze","Inspect media formats"),
+    BotCommand("status","Show active jobs"),
+    BotCommand("queue","Show queue state"),
+    BotCommand("pause","Pause your queue"),
+    BotCommand("resume","Resume your queue"),
+    BotCommand("cancel","Cancel your jobs"),
+    BotCommand("settings","Open settings"),
+    BotCommand("history","Show download history"),
+    BotCommand("favorites","Show favorites"),
+    BotCommand("stats","Show personal statistics"),
+    BotCommand("version","Show bot version"),
+    BotCommand("terms","Show usage terms"),
+]
+ADMIN_COMMANDS = PUBLIC_COMMANDS + [
+    BotCommand("admin","Open admin dashboard"),
+    BotCommand("panel","Open admin dashboard"),
+    BotCommand("cleanup","Remove stale files"),
+    BotCommand("announce","Broadcast an announcement"),
+]
+
+
 async def post_init(app):
     bot.server_heartbeat("online")
+    await app.bot.set_my_commands(PUBLIC_COMMANDS)
+    for admin_id in bot.ADMIN_USER_IDS:
+        try:
+            await app.bot.set_my_commands(ADMIN_COMMANDS, scope=BotCommandScopeChat(admin_id))
+        except Exception as exc:
+            log.warning("Could not set admin command menu for %s: %s", admin_id, error_text(exc))
     app.bot_data["telegram_watchdog_task"] = asyncio.create_task(telegram_watchdog(app))
     app.bot_data["server_watchdog_task"] = asyncio.create_task(server_watchdog())
 
