@@ -28,6 +28,12 @@ jobs:
           assert callable(bot.download)
           assert bot.cookie_platform("https://www.instagram.com/stories/example/") == "instagram"
           assert bot.cookie_platform("https://www.youtube.com/watch?v=test") == "youtube"
+          class FakeMessage:
+              text = "🎬 https://youtu.be/test and https://www.instagram.com/reel/test/."
+              caption = None
+              entities = ()
+              caption_entities = ()
+          assert bot.extract_message_urls(FakeMessage()) == ["https://youtu.be/test", "https://www.instagram.com/reel/test/"]
           assert bot.cookie_platform("https://x.com/example/status/1") == "x"
           assert callable(bot.user_error_message)
           assert "will not bypass authentication" in bot.user_error_message("You need to log in to access this content")
@@ -73,6 +79,8 @@ jobs:
           grep -q 'YTDLP_JS_RUNTIME' bot.py
           grep -q 'js_runtimes.*YTDLP_JS_RUNTIME' runner.py
           grep -q 'js_runtimes.*YTDLP_JS_RUNTIME' bot.py
+          grep -q 'extract_message_urls' bot.py
+          grep -q 'filters.CAPTION' bot.py
           grep -q 'yt-dlp\[default\]' requirements.txt
           grep -q 'deno' Dockerfile
           grep -Eq 'apt-get install.*unzip' Dockerfile
@@ -86,6 +94,6 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.11.2"
+          test "$(cat VERSION)" = "1.11.3"
           test -f admin_panel.py
           test -f cookies/README.md
