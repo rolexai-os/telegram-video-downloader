@@ -6,7 +6,7 @@ from pathlib import Path
 import yt_dlp
 import bot
 import admin_panel
-from telegram.error import NetworkError, RetryAfter, TimedOut
+from telegram.error import Conflict, NetworkError, RetryAfter, TimedOut
 from telegram.request import HTTPXRequest
 
 log = logging.getLogger("telegram-video-downloader.runner")
@@ -16,7 +16,11 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.7.0"
+FEATURE_VERSION = "1.7.1"
+
+INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
+INSTANCE_LOCK_HANDLE = None
+CONFLICT_EXIT_CODE = 75
 
 # Telegram Bot API network hardening.
 TG_CONNECT_TIMEOUT = max(5.0, float(os.getenv("TG_CONNECT_TIMEOUT", "20")))
@@ -28,6 +32,38 @@ TG_CONNECTION_POOL = max(8, int(os.getenv("TG_CONNECTION_POOL", "32")))
 TG_HTTP_RETRIES = max(0, int(os.getenv("TG_HTTP_RETRIES", "3")))
 TG_UPDATES_TIMEOUT = max(10, int(os.getenv("TG_UPDATES_TIMEOUT", "35")))
 WATCHDOG_INTERVAL = max(30, int(os.getenv("TG_WATCHDOG_INTERVAL", "60")))
+
+def acquire_instance_lock():
+    """Prevent two local runner.py processes from polling the same bot token."""
+    global INSTANCE_LOCK_HANDLE
+    import fcntl
+    INSTANCE_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    INSTANCE_LOCK_HANDLE = INSTANCE_LOCK_FILE.open("a+")
+    try:
+        fcntl.flock(INSTANCE_LOCK_HANDLE.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log.error("Another runner.py instance already owns %s; refusing to start.", INSTANCE_LOCK_FILE)
+        raise SystemExit(CONFLICT_EXIT_CODE)
+    INSTANCE_LOCK_HANDLE.seek(0)
+    INSTANCE_LOCK_HANDLE.truncate()
+    INSTANCE_LOCK_HANDLE.write(str(os.getpid()) + "\n")
+    INSTANCE_LOCK_HANDLE.flush()
+
+
+def release_instance_lock():
+    global INSTANCE_LOCK_HANDLE
+    if INSTANCE_LOCK_HANDLE is None:
+        return
+    try:
+        import fcntl
+        fcntl.flock(INSTANCE_LOCK_HANDLE.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        INSTANCE_LOCK_HANDLE.close()
+    except OSError:
+        pass
+    INSTANCE_LOCK_HANDLE = None
 
 
 def make_telegram_request(*, read_timeout, write_timeout, connection_pool_size):
@@ -77,6 +113,8 @@ async def telegram_error_handler(update, context):
     exc = context.error
     if isinstance(exc, RetryAfter):
         log.warning("Telegram API rate limit; retry after %s seconds", exc.retry_after)
+    elif isinstance(exc, Conflict):
+        log.error("Telegram getUpdates conflict: another active poller owns this bot token. Stop the other deployment/process.")
     elif isinstance(exc, (TimedOut, NetworkError)):
         log.warning("Telegram API network error; request/polling layer will retry: %s", error_text(exc))
     else:
@@ -268,6 +306,9 @@ def ensure_feature_schema():
 
 def main():
     if not bot.BOT_TOKEN: raise SystemExit("BOT_TOKEN is not set")
+    acquire_instance_lock()
+    import atexit
+    atexit.register(release_instance_lock)
     bot.db(); ensure_feature_schema()
     request = make_telegram_request(
         read_timeout=TG_READ_TIMEOUT,
@@ -310,7 +351,11 @@ def main():
                         secret_token=bot.WEBHOOK_SECRET or None, drop_pending_updates=True,
                         allowed_updates=bot.Update.ALL_TYPES, max_connections=20)
     else:
-        app.run_polling(allowed_updates=bot.Update.ALL_TYPES, drop_pending_updates=True, timeout=TG_UPDATES_TIMEOUT, bootstrap_retries=-1, poll_interval=0.5)
+        try:
+            app.run_polling(allowed_updates=bot.Update.ALL_TYPES, drop_pending_updates=True, timeout=TG_UPDATES_TIMEOUT, bootstrap_retries=-1, poll_interval=0.5)
+        except Conflict:
+            log.error("Telegram rejected getUpdates with HTTP 409: another bot instance is active. Stop the duplicate instance and restart this one.")
+            raise SystemExit(CONFLICT_EXIT_CODE)
 
 if __name__ == "__main__":
     main()
