@@ -1,5 +1,26 @@
 # Telegram Video Downloader
 
+## v1.9.0 reliability, long-video delivery and command menu
+
+- Social URL handling now recognizes more mobile/subdomain variants for major platforms.
+- yt-dlp retries, fragment retries, continuation and HLS handling are tuned for longer media.
+- Telegram's command menu is populated automatically; admins receive an expanded admin-only menu.
+- Audit logging records commands, links, buttons, user identity, server ID and download outcomes.
+- A persistent application log file is available from the admin panel.
+- Large media has no application-side duration/size cap by default. Files above the configured Telegram upload chunk size are automatically split with FFmpeg and delivered in parts.
+- `STORAGE_QUOTA_GB=0` means no application quota; physical disk/object-storage capacity still applies.
+- `KEEP_MEDIA=1` enables local archive retention. On Render Free, local files remain ephemeral and are lost on restart/redeploy/spin-down.
+- Authorized browser-cookie loading is supported locally with `COOKIES_FROM_BROWSER`; fake cookies cannot authenticate private stories/posts.
+- A non-authentic cookie syntax example is included under `cookies/examples/dummy.txt`.
+
+### Important platform limits
+
+yt-dlp supports many extractors, but no downloader can guarantee every social URL indefinitely because platforms change their APIs, authentication and anti-bot behavior. Authentication-required stories/posts need an authorized session cookie.
+
+Telegram's standard Bot API currently limits newly uploaded videos/files to 50 MB. The bot therefore splits larger media into parts automatically. A self-hosted Local Bot API Server can raise uploads to 2000 MB.
+
+Render Free uses an ephemeral filesystem, so it is not an unlimited permanent file store. For durable archives use supported persistent storage or a paid persistent disk.
+
 ## v1.8.0 audit + server monitoring
 
 - `/admin` now opens the protected inline admin control panel.
@@ -312,4 +333,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.8.0**
+**Testing / Beta — v1.9.0**
