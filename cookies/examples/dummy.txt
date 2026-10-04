@@ -1,0 +1,3 @@
+# Netscape HTTP Cookie File
+# Non-authentic test cookie. This does not authenticate any social-media account.
+example.com	FALSE	/	FALSE	0	tvd_dummy	1
