@@ -26,14 +26,14 @@ jobs:
           import admin_panel
           assert callable(bot.main)
           assert callable(bot.download)
-          assert bot.cookie_platform("https://www.instagram.com/stories/example/") == "instagram"
-          assert bot.cookie_platform("https://www.youtube.com/watch?v=test") == "youtube"
+          assert bot.is_disabled_url("https://www.instagram.com/reel/test/")
+          assert bot.is_disabled_url("https://www.youtube.com/watch?v=test")
           class FakeMessage:
-              text = "🎬 https://youtu.be/test and https://www.instagram.com/reel/test/."
+              text = "🎬 https://x.com/example/status/1 and https://www.tiktok.com/@example/video/1."
               caption = None
               entities = ()
               caption_entities = ()
-          assert bot.extract_message_urls(FakeMessage()) == ["https://youtu.be/test", "https://www.instagram.com/reel/test/"]
+          assert bot.extract_message_urls(FakeMessage()) == ["https://x.com/example/status/1", "https://www.tiktok.com/@example/video/1"]
           assert bot.cookie_platform("https://x.com/example/status/1") == "x"
           assert callable(bot.user_error_message)
           assert "will not bypass authentication" in bot.user_error_message("You need to log in to access this content")
@@ -74,11 +74,8 @@ jobs:
           grep -q 'ap|logs' admin_panel.py
           grep -q 'ap|servers' admin_panel.py
           grep -q 'TELEGRAM_UPLOAD_CHUNK_MB' bot.py
-          grep -q 'YTDLP_JS_RUNTIME' runner.py
-          grep -q '_instagram_fallback_media_url' runner.py
-          grep -q 'YTDLP_JS_RUNTIME' bot.py
-          grep -q 'js_runtimes.*YTDLP_JS_RUNTIME' runner.py
-          grep -q 'js_runtimes.*YTDLP_JS_RUNTIME' bot.py
+          grep -q 'DISABLED_HOSTS' bot.py
+          grep -q 'ensure_supported_url' runner.py
           grep -q 'extract_message_urls' bot.py
           grep -q 'filters.CAPTION' bot.py
           grep -q 'yt-dlp\[default\]' requirements.txt
@@ -94,6 +91,6 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.11.3"
+          test "$(cat VERSION)" = "1.12.0"
           test -f admin_panel.py
           test -f cookies/README.md
