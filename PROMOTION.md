@@ -18,7 +18,7 @@ Repository: https://github.com/rolexai-os/telegram-video-downloader
 • Self-hosted Python bot
 • Multi-user / multi-device
 • Multiple links per message
-• YouTube, Instagram, TikTok, Reddit, X and more via yt-dlp
+• TikTok, Reddit, X, Facebook, Vimeo, Dailymotion and more via yt-dlp
 • Video quality selection + MP3
 • FFmpeg support
 • Rate limiting + job management
@@ -44,7 +44,7 @@ A self-hosted Telegram bot for downloading supported online media through yt-dlp
 ✅ FFmpeg integration  
 ✅ Job queue + cancellation  
 ✅ Rate limiting  
-✅ YouTube, Instagram, TikTok, Reddit, X and more
+✅ TikTok, Reddit, X, Facebook, Vimeo, Dailymotion and more
 
 GitHub:
 https://github.com/rolexai-os/telegram-video-downloader
