@@ -7,6 +7,7 @@ import yt_dlp
 import bot
 import admin_panel
 from telegram.error import Conflict, NetworkError, RetryAfter, TimedOut
+from telegram.ext import TypeHandler
 from telegram.request import HTTPXRequest
 
 log = logging.getLogger("telegram-video-downloader.runner")
@@ -32,6 +33,7 @@ TG_CONNECTION_POOL = max(8, int(os.getenv("TG_CONNECTION_POOL", "32")))
 TG_HTTP_RETRIES = max(0, int(os.getenv("TG_HTTP_RETRIES", "3")))
 TG_UPDATES_TIMEOUT = max(10, int(os.getenv("TG_UPDATES_TIMEOUT", "35")))
 WATCHDOG_INTERVAL = max(30, int(os.getenv("TG_WATCHDOG_INTERVAL", "60")))
+SERVER_HEARTBEAT_INTERVAL = max(15, int(os.getenv("SERVER_HEARTBEAT_INTERVAL", "30")))
 
 def acquire_instance_lock():
     """Prevent two local runner.py processes from polling the same bot token."""
@@ -79,6 +81,23 @@ def make_telegram_request(*, read_timeout, write_timeout, connection_pool_size):
     )
 
 
+async def server_watchdog():
+    """Keep the current local/Render server presence fresh in SQLite."""
+    while True:
+        try:
+            bot.server_heartbeat("online")
+        except Exception as exc:
+            log.warning("Server heartbeat failed: %s", error_text(exc))
+        await asyncio.sleep(SERVER_HEARTBEAT_INTERVAL)
+
+
+async def audit_update(update, context):
+    try:
+        bot.touch_update(update)
+    except Exception as exc:
+        log.warning("Audit logging failed: %s", error_text(exc))
+
+
 async def telegram_watchdog(app):
     """Periodically verify Telegram API reachability."""
     while True:
@@ -99,14 +118,21 @@ async def telegram_watchdog(app):
 
 
 async def post_init(app):
+    bot.server_heartbeat("online")
     app.bot_data["telegram_watchdog_task"] = asyncio.create_task(telegram_watchdog(app))
+    app.bot_data["server_watchdog_task"] = asyncio.create_task(server_watchdog())
 
 
 async def post_shutdown(app):
-    task = app.bot_data.pop("telegram_watchdog_task", None)
-    if task:
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+    for key in ("telegram_watchdog_task","server_watchdog_task"):
+        task = app.bot_data.pop(key, None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    try:
+        bot.server_heartbeat("offline")
+    except Exception:
+        pass
 
 
 async def telegram_error_handler(update, context):
@@ -328,6 +354,7 @@ def main():
            .post_shutdown(post_shutdown)
            .build())
     app.add_error_handler(telegram_error_handler)
+    app.add_handler(TypeHandler(bot.Update, audit_update), group=-1)
     commands = {
         "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
         "status": bot.status_cmd, "queue": queue_cmd, "pause": pause_cmd, "resume": resume_cmd,
