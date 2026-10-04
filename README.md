@@ -159,7 +159,8 @@ This release connects the roadmap features that can safely run in the existing s
 | /cancel | Cancel active jobs |
 | /version | Release/version information |
 | /terms | Beta/legal-use notice |
-| /admin | Protected full inline admin panel |\n| /panel | Same protected inline admin panel |
+| /admin | Protected full inline admin panel |
+| /panel | Same protected inline admin panel |
 
 Admin-only commands include `/panel`, `/cleanup` and `/announce <message>`. Set `ADMIN_USER_IDS` first. The panel is Telegram-native and restricted by numeric Telegram user ID.
 
