@@ -22,7 +22,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.12.0"
+FEATURE_VERSION = "1.13.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -259,7 +259,7 @@ def robust_sync_download(url, audio_only=False, progress_hook=None, profile="bes
             log.warning("yt-dlp attempt %s/%s: %s | %s", attempt, MAX_ATTEMPTS, classify_error(exc), error_text(exc))
             if attempt < MAX_ATTEMPTS:
                 time.sleep(RETRY_DELAY * attempt + random.uniform(0, 0.75))
-        raise last or RuntimeError("Download failed")
+    raise last or RuntimeError("Download failed")
 
 def robust_sync_quality_download(url, profile, progress_hook=None, captions=False):
     return robust_sync_download(url, False, progress_hook, profile, captions)
