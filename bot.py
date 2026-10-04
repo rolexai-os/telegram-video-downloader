@@ -77,9 +77,9 @@ def db():
 
 def touch(uid,user=None):
     c=db(); now=int(time.time())
-    username=(getattr(user,"username","",None) or "") if user else ""
-    first_name=(getattr(user,"first_name","",None) or "") if user else ""
-    last_name=(getattr(user,"last_name","",None) or "") if user else ""
+    username=(getattr(user,"username","") or "") if user else ""
+    first_name=(getattr(user,"first_name","") or "") if user else ""
+    last_name=(getattr(user,"last_name","") or "") if user else ""
     c.execute("""INSERT INTO users(user_id,username,first_name,last_name,created_at,last_seen)
                  VALUES(?,?,?,?,?,?)
                  ON CONFLICT(user_id) DO UPDATE SET
@@ -93,7 +93,7 @@ def touch(uid,user=None):
 def audit_event(user,event,url="",details=""):
     if not user:return
     uid=getattr(user,"id",0) or 0
-    username=getattr(user,"username","",None) or ""
+    username=getattr(user,"username","") or ""
     touch(uid,user)
     if not LOG_URLS:url=""
     try:
@@ -229,7 +229,7 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
-    if YTDLP_JS_RUNTIME:o["js_runtimes"]=YTDLP_JS_RUNTIME
+    if YTDLP_JS_RUNTIME:o["js_runtimes"]={YTDLP_JS_RUNTIME:{}}
     if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     cookie_file=cookie_file_for_url(url) if url else None
     if cookie_file:
