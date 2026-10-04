@@ -54,3 +54,10 @@ Real cookie files contain session credentials. Do not upload them to GitHub, do 
 The admin panel shows only whether a cookie file exists and its size; it never displays cookie values.
 
 Cookies do not bypass DRM, paywalls, authentication controls, or unsupported extractors. They only allow yt-dlp to use an already-authorized session where the extractor supports it.
+
+
+## Dummy/test cookie template
+
+`examples/dummy.txt` is intentionally non-authentic and contains no real account session. It only demonstrates the required Netscape cookie-file syntax. It will **not** unlock private stories/posts.
+
+For real authorized access, export your own current session cookies from a browser and keep them outside Git. yt-dlp requires Netscape/Mozilla cookie-file format when using `--cookies`. Browser-cookie extraction can also be enabled locally with `COOKIES_FROM_BROWSER=firefox`. Never commit or share session cookies; they can provide account access.
