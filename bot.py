@@ -56,7 +56,28 @@ LOG_FILE=Path(os.getenv("APP_LOG_FILE","bot.log"))
 logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(message)s",handlers=[logging.StreamHandler(),logging.FileHandler(LOG_FILE,encoding="utf-8")])
 logger=logging.getLogger("telegram-video-downloader")
 GLOBAL_SEMAPHORE=asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS); JOBS={}; LAST_REQUEST={}; QUALITY_REQUESTS={}; LOCK=asyncio.Lock()
-URL_RE=re.compile(r"https?://[^\s<>\"]+",re.I)
+URL_RE=re.compile(r"https?://[^\s<>\"]+|www\.[^\s<>\"]+",re.I)
+
+def extract_message_urls(message):
+    """Extract visible and Telegram-embedded URLs from text or media captions."""
+    raw=message.text or message.caption or ""
+    urls=[clean_url(x) for x in URL_RE.findall(raw)]
+    entities=message.entities if message.text is not None else message.caption_entities
+    for entity in entities or ():
+        if entity.type == "text_link" and entity.url:
+            urls.append(clean_url(entity.url))
+        elif entity.type == "url":
+            try:
+                urls.append(clean_url(message.parse_entity(entity)))
+            except (RuntimeError, AttributeError):
+                pass
+    seen=set(); result=[]
+    for url in urls:
+        if not url: continue
+        if url.startswith("www."): url="https://"+url
+        if url.startswith(("http://","https://")) and url not in seen:
+            seen.add(url); result.append(url)
+    return result
 
 LANG={"en":"🎬 Social Media Downloader","ml":"🎬 സോഷ്യൽ മീഡിയ ഡൗൺലോഡർ","hi":"🎬 सोशल मीडिया डाउनलोडर","ta":"🎬 சமூக ஊடக பதிவிறக்கி"}
 
@@ -121,7 +142,7 @@ def touch_update(update):
     touch(user.id,user)
     message=getattr(update,"effective_message",None)
     text_value=getattr(message,"text",None) or getattr(message,"caption",None) or ""
-    urls=[clean_url(x) for x in URL_RE.findall(text_value)]
+    urls=extract_message_urls(message) if message else []
     if urls:
         event="command" if text_value.lstrip().startswith("/") else "link_received"
         audit_event(user,event,urls[0] if len(urls)==1 else "",f"links={len(urls)}")
@@ -515,14 +536,14 @@ def main():
     if not shutil.which("ffmpeg"):logger.warning("FFmpeg not found")
     app=Application.builder().token(BOT_TOKEN).build()
     for name,fn in {"start":start,"help":help_cmd,"terms":terms_cmd,"status":status_cmd,"cancel":cancel_cmd,"quality":quality_cmd,"mp3":mp3_cmd,"subs":subs_cmd,"playlist":playlist_cmd,"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"admin":admin_cmd}.items():app.add_handler(CommandHandler(name,fn))
-    app.add_handler(CallbackQueryHandler(callback,pattern=r"^(menu|set|q)\|"));app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,handle_message))
+    app.add_handler(CallbackQueryHandler(callback,pattern=r"^(menu|set|q)\|"));app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND,handle_message))
     if WEBHOOK_URL:app.run_webhook(listen="0.0.0.0",port=PORT,url_path="telegram",webhook_url=f"{WEBHOOK_URL.rstrip('/')}/telegram",secret_token=WEBHOOK_SECRET or None,drop_pending_updates=True,allowed_updates=Update.ALL_TYPES,max_connections=20)
     else:app.run_polling(allowed_updates=Update.ALL_TYPES,drop_pending_updates=True)
 
 async def handle_message(update,context):
     m=update.effective_message;uid=update.effective_user.id
     if await rate_limit(uid):return await m.reply_text("⏱️ Please wait a moment.")
-    urls=[clean_url(x) for x in URL_RE.findall(m.text or "")]
+    urls=extract_message_urls(m)
     if not urls:return await m.reply_text("❌ Send one or more supported media URLs.")
     if MAX_LINKS_PER_MESSAGE and len(urls)>MAX_LINKS_PER_MESSAGE:return await m.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per message.")
     _,profile,audio,captions=settings(uid)
