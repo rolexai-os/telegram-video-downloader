@@ -11,8 +11,6 @@ Place only **authorized yt-dlp Netscape-format cookie files** in this directory.
     ├── admin_panel.py
     ├── downloads/
     ├── cookies/
-    │   ├── youtube.txt
-    │   ├── instagram.txt
     │   ├── facebook.txt
     │   ├── tiktok.txt
     │   ├── x.txt
@@ -28,14 +26,12 @@ Place only **authorized yt-dlp Netscape-format cookie files** in this directory.
     │   └── generic.txt
     └── bot.db
 
-The bot automatically selects the cookie jar from the URL platform. Missing files are ignored.
+The bot automatically selects the cookie jar from supported URL platforms. YouTube and Instagram are intentionally disabled and are not accepted by the downloader.
 
 ## Exact path examples
 
 Linux / VPS:
 
-    /app/telegram-video-downloader/cookies/youtube.txt
-    /app/telegram-video-downloader/cookies/instagram.txt
 
 Termux:
 
@@ -44,8 +40,6 @@ Termux:
 
 Or set an explicit path in .env:
 
-    COOKIES_YOUTUBE=/secure/cookies/youtube.txt
-    COOKIES_INSTAGRAM=/secure/cookies/instagram.txt
 
 ## Security
 
