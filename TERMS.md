@@ -36,7 +36,7 @@ You must comply with applicable laws in your jurisdiction and with the rules of 
 
 This project uses third-party software and services, including Telegram and yt-dlp-supported websites. Their availability, policies, APIs, authentication requirements, and terms may change independently of this project.
 
-This project is not affiliated with or endorsed by Telegram, YouTube, Instagram, X, Facebook, TikTok, Reddit, Vimeo, Dailymotion, or other third-party platforms unless explicitly stated.
+This project is not affiliated with or endorsed by Telegram, X, Facebook, TikTok, Reddit, Vimeo, Dailymotion, or other third-party platforms unless explicitly stated.
 
 ## 5. Copyright complaints
 
