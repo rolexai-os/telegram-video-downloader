@@ -70,7 +70,7 @@ jobs:
           grep -q 'TELEGRAM_UPLOAD_CHUNK_MB' bot.py
           grep -q 'YTDLP_JS_RUNTIME' runner.py
           grep -q 'YTDLP_JS_RUNTIME' bot.py
-          grep -q 'yt-dlp[default]' requirements.txt
+          grep -q 'yt-dlp\[default\]' requirements.txt
           grep -q 'deno' Dockerfile
           grep -q 'COOKIES_FROM_BROWSER' bot.py
           grep -q 'BotCommand' runner.py
