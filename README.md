@@ -1,5 +1,29 @@
 # Telegram Video Downloader
 
+## v1.14.0 advanced admin control panel
+
+The Telegram-native admin panel has been restored and expanded. Admins listed in `ADMIN_USER_IDS` can use `/admin` or `/panel` to access:
+
+- 📊 Overview: users, downloads, success/failure totals, audit events, announcements, server status, disk, FFmpeg and yt-dlp.
+- 📈 Analytics: outcome totals, successful data volume and top detected platforms.
+- 👥 Users: recent users, usernames, last-seen time, link activity and successful downloads.
+- 📥 History: recent download history with status and media size.
+- 📝 Audit logs: recent user/action/server activity without exposing secrets.
+- 🖥️ Servers: local/Render heartbeat and process visibility.
+- ⚙️ Jobs: active jobs, global concurrency and paused-user count.
+- 💾 Storage: download/database/cookie locations, file counts, disk usage, quota and retention mode.
+- 🍪 Cookies: safe presence/size checks for authorized cookie jars; values are never displayed.
+- 🩺 Health: SQLite, FFmpeg, directories, token configuration and yt-dlp checks.
+- 🔧 Runtime: safe non-secret Python, platform, release and downloader configuration.
+- 📄 System log: recent application log output.
+- 🧹 Cleanup: removes stale downloaded files older than one hour.
+- 📣 Broadcast Center: guided `/announce` workflow with announcement history.
+- 🔄 Refresh: reloads the live dashboard.
+
+The panel remains Telegram-only and admin-ID protected. It does not expose a public admin HTTP endpoint or provide authentication/DRM bypass features.
+
+# Telegram Video Downloader
+
 ## v1.11.3 automatic link detection
 
 - Sending a normal URL directly to the bot automatically queues the download; no command is required.
