@@ -14,7 +14,19 @@ services:
       - key: DOWNLOAD_DIR
         value: /tmp/downloads
       - key: MAX_FILE_SIZE_MB
-        value: "49"
+        value: "0"
+      - key: TELEGRAM_UPLOAD_CHUNK_MB
+        value: "45"
+      - key: STORAGE_QUOTA_GB
+        value: "0"
+      - key: STORAGE_BACKEND
+        value: local
+      - key: KEEP_MEDIA
+        value: "0"
+      - key: APP_LOG_FILE
+        value: /tmp/bot.log
+      - key: COOKIES_FROM_BROWSER
+        value: ""
       - key: MAX_CONCURRENT_DOWNLOADS
         value: "1"
       - key: MAX_LINKS_PER_MESSAGE
