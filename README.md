@@ -1,5 +1,20 @@
 # Telegram Video Downloader
 
+## v1.7.0 reliability update
+
+### Telegram API connection hardening
+- Dedicated HTTPX request pools for normal Bot API calls and long polling.
+- Longer connect/read/write/pool timeouts for cloud and mobile-network TLS stalls.
+- HTTP transport retries transient connection failures before surfacing an error.
+- Long polling uses a longer getUpdates timeout and indefinite bootstrap retries.
+- A background Telegram watchdog periodically checks Bot API reachability and records the result in logs.
+- A global PTB error handler replaces the previous `No error handlers are registered` warning with structured network/error logging.
+- The Render web process supervises `runner.py` and restarts it after an unexpected exit.
+- Existing cookies, downloads, database, admin panel, commands and updater behavior remain compatible.
+
+> **Important:** These changes improve resilience to transient network failures and unexpected runner exits. They cannot guarantee 24/7 uptime if a free hosting provider suspends or restarts the service.
+
+
 > **Testing / Beta:** Active development. Use only with content you are legally permitted to access, download, copy, or convert. See [TERMS.md](TERMS.md).
 
 A self-hosted Telegram media downloader built with Python, python-telegram-bot, yt-dlp, and FFmpeg.
@@ -138,6 +153,17 @@ YTDLP_MAX_ATTEMPTS=3
 YTDLP_RETRY_DELAY=2
 YTDLP_FORCE_IPV4=0
 # YTDLP_USER_AGENT=
+
+TG_CONNECT_TIMEOUT=20
+TG_READ_TIMEOUT=45
+TG_WRITE_TIMEOUT=90
+TG_POOL_TIMEOUT=20
+TG_MEDIA_WRITE_TIMEOUT=180
+TG_CONNECTION_POOL=32
+TG_HTTP_RETRIES=3
+TG_UPDATES_TIMEOUT=35
+TG_WATCHDOG_INTERVAL=60
+RUNNER_RESTART_DELAY=5
 ~~~
 
 Never commit the real .env, cookies, bot token, API keys, or session secrets.
@@ -239,7 +265,14 @@ Some roadmap items require infrastructure rather than another command handler an
 
 These belong in the next infrastructure release rather than being represented as working features without their required backend.
 
+## Telegram/Render reliability
+
+The service now treats Telegram connectivity as a recoverable dependency. A `TimedOut`/TLS connection failure during a reply is logged and retried by the HTTP transport where applicable instead of producing an unhandled-update warning. Long polling is configured separately from normal API traffic, and the runner process is supervised by `web.py` on Render.
+
+For a free Render deployment, keep `PTB_MANAGED_WEBHOOK` unset. `web.py` owns Render's public port and `runner.py` uses polling; enabling a second PTB webhook listener would recreate the port-conflict problem fixed in v1.6.1.
+
 ## Validation
+
 
 ~~~bash
 python -m compileall -q bot.py runner.py web.py update.py
@@ -253,4 +286,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.6.0**
+**Testing / Beta — v1.7.0**
