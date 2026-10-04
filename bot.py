@@ -446,7 +446,9 @@ async def quality_callback(update,context):
         if not file_path or not file_path.exists():raise RuntimeError("No media file was produced")
         n=file_path.stat().st_size
         if n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above {MAX_FILE_SIZE_MB} MB")
-        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem);await q.edit_message_text("📤 Uploading…")
+        await q.edit_message_text("📤 Uploading…")
+        await send_media(q.message,file_path,audio,f'✅ {file_path.stem}')
+        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem)
         await send_media(q.message,file_path,audio,f"✅ {file_path.stem}")
     except asyncio.CancelledError:history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url);await q.edit_message_text("🛑 Cancelled.")
     except Exception as exc:
