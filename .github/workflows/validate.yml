@@ -73,6 +73,7 @@ jobs:
           grep -q 'YTDLP_JS_RUNTIME' bot.py
           grep -q 'yt-dlp\[default\]' requirements.txt
           grep -q 'deno' Dockerfile
+          grep -Eq 'apt-get install.*unzip' Dockerfile
           grep -q 'COOKIES_FROM_BROWSER' bot.py
           grep -q 'BotCommand' runner.py
           grep -q 'audit_update' runner.py
@@ -83,6 +84,6 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.11.0"
+          test "$(cat VERSION)" = "1.11.1"
           test -f admin_panel.py
           test -f cookies/README.md
