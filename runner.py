@@ -361,7 +361,7 @@ def main():
         "cancel": bot.cancel_cmd, "analyze": analyze_cmd, "quality": bot.quality_cmd,
         "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
         "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
-        "stats": stats_cmd, "version": version_cmd, "admin": bot.admin_cmd,
+        "stats": stats_cmd, "version": version_cmd, "admin": admin_panel.panel_cmd,
         "cleanup": cleanup_cmd, "announce": announce_cmd, "panel": admin_panel.panel_cmd,
     }
     for name, fn in commands.items(): app.add_handler(bot.CommandHandler(name, fn))
