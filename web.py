@@ -25,6 +25,10 @@ def supervise_bot():
     while not STOP_EVENT.wait(2):
         if BOT_PROCESS is None or BOT_PROCESS.poll() is not None:
             exit_code = None if BOT_PROCESS is None else BOT_PROCESS.returncode
+            if exit_code == 75:
+                print("runner.py stopped because another instance owns the Telegram poller; not restarting.",
+                      flush=True)
+                break
             if exit_code is not None:
                 print(f"runner.py exited with code {exit_code}; restarting in {RESTART_DELAY}s",
                       flush=True)
