@@ -1,5 +1,11 @@
 # Telegram Video Downloader
 
+## v1.11.1 Docker/Render build fix
+
+- The Docker image now installs `unzip` before running the official Deno installer.
+- This fixes Render/Docker builds that failed with `either unzip or 7z is required to install Deno`.
+- No runtime downloader behavior or cookie handling was changed by this patch.
+
 ## v1.9.0 reliability, long-video delivery and command menu
 
 - Social URL handling now recognizes more mobile/subdomain variants for major platforms.
@@ -342,4 +348,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.11.0**
+**Testing / Beta — v1.11.1**
