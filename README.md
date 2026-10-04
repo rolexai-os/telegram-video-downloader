@@ -152,9 +152,9 @@ This release connects the roadmap features that can safely run in the existing s
 - Existing-user update scripts
 - Environment and cookie preservation during updates
 
-## Disabled platforms
+## YouTube and Instagram support
 
-The bot intentionally rejects **YouTube/YouTube Shorts** and **Instagram/Reels** URLs. They are removed from platform detection, cookie configuration, download execution, and Render configuration.
+YouTube videos/Shorts and Instagram posts/Reels are supported again in v1.13.0 through yt-dlp. Authorized cookies can be supplied per platform when needed. The bot does not bypass authentication, DRM, private-content restrictions, or access controls.
 
 ## Commands
 
@@ -272,6 +272,8 @@ python runner.py
 The tracked `cookies/README.md` contains the full folder layout. In a normal checkout, put authorized cookie jars here:
 
 ~~~text
+cookies/youtube.txt
+cookies/instagram.txt
 cookies/facebook.txt
 cookies/tiktok.txt
 cookies/x.txt
@@ -356,4 +358,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.11.1**
+**Testing / Beta — v1.13.0**
