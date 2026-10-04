@@ -22,7 +22,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.10.0"
+FEATURE_VERSION = "1.11.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -239,6 +239,65 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
     if ua: o["http_headers"] = {"User-Agent": ua}
     return o
 
+def _instagram_fallback_media_url(url):
+    """Best-effort fallback for public Instagram pages when the API extractor breaks."""
+    import html as _html
+    import re as _re
+    from urllib.request import Request, urlopen
+
+    headers = {
+        "User-Agent": USER_AGENT or DEFAULT_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://www.instagram.com/",
+    }
+    with urlopen(Request(url, headers=headers), timeout=30) as response:
+        page = response.read(8 * 1024 * 1024).decode("utf-8", "ignore")
+
+    patterns = [
+        r'<meta[^>]+property=["\']og:video(?::secure_url)?["\'][^>]+content=["\']([^"\']+)',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:video(?::secure_url)?["\']',
+        r'["\']video_url["\']\s*:\s*["\'](https?[^"\']+)',
+    ]
+    candidates = []
+    for pattern in patterns:
+        candidates.extend(_re.findall(pattern, page, flags=_re.I))
+    candidates.extend(_re.findall(r'https?[^"\'\\\n ]+?\.mp4(?:\?[^"\'\\\n ]*)?', page, flags=_re.I))
+
+    for candidate in candidates:
+        candidate = _html.unescape(candidate).replace("\\/", "/").replace("\\u0026", "&").replace("\\u002F", "/")
+        if candidate.startswith("http") and ".mp4" in candidate.lower():
+            return candidate
+    return None
+
+
+def _instagram_fallback_download(url, template, audio_only, progress_hook):
+    media_url = _instagram_fallback_media_url(url)
+    if not media_url:
+        raise RuntimeError("Instagram extractor failed and the public page did not expose a direct video URL")
+    log.warning("Instagram extractor fallback: downloading page-exposed media URL")
+    opts = {
+        "format": "bestaudio/best" if audio_only else "best",
+        "outtmpl": template,
+        "noplaylist": True,
+        "quiet": True,
+        "retries": 3,
+        "fragment_retries": 5,
+        "socket_timeout": 30,
+        "http_headers": {
+            "User-Agent": USER_AGENT or DEFAULT_UA,
+            "Referer": "https://www.instagram.com/",
+        },
+    }
+    if progress_hook:
+        opts["progress_hooks"] = [progress_hook]
+    if audio_only:
+        opts["postprocessors"] = [{"key":"FFmpegExtractAudio","preferredcodec":"mp3",
+                                   "preferredquality":os.getenv("DEFAULT_AUDIO_QUALITY","192")}]
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(media_url, download=True)
+        return bot.locate_result(ydl, info, audio_only) if info else None
+
+
 def robust_sync_download(url, audio_only=False, progress_hook=None, profile="best", captions=False):
     suffix = "mp3" if audio_only else "%(ext)s"
     template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
@@ -259,6 +318,13 @@ def robust_sync_download(url, audio_only=False, progress_hook=None, profile="bes
             log.warning("yt-dlp attempt %s/%s: %s | %s", attempt, MAX_ATTEMPTS, classify_error(exc), error_text(exc))
             if attempt < MAX_ATTEMPTS:
                 time.sleep(RETRY_DELAY * attempt + random.uniform(0, 0.75))
+    if "instagram.com" in url.lower():
+        try:
+            result = _instagram_fallback_download(url, template, audio_only, progress_hook)
+            if result:
+                return result
+        except Exception as fallback_exc:
+            log.warning("Instagram page-media fallback failed: %s", error_text(fallback_exc))
     raise last or RuntimeError("Download failed")
 
 def robust_sync_quality_download(url, profile, progress_hook=None, captions=False):
