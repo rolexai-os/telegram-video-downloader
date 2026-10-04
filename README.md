@@ -342,4 +342,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.9.0**
+**Testing / Beta — v1.10.0**
