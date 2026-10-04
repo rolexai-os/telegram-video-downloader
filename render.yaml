@@ -27,6 +27,10 @@ services:
         value: /tmp/bot.log
       - key: COOKIES_FROM_BROWSER
         value: ""
+      - key: YTDLP_JS_RUNTIME
+        value: deno
+      - key: YTDLP_REMOTE_COMPONENTS
+        value: ""
       - key: MAX_CONCURRENT_DOWNLOADS
         value: "1"
       - key: MAX_LINKS_PER_MESSAGE
