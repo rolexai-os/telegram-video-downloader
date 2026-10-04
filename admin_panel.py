@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Telegram-native admin control panel with user, audit and server visibility."""
+"""Advanced Telegram-native admin control panel.
+
+The panel is intentionally Telegram-only: no public admin HTTP endpoint,
+and no secret/cookie values are ever displayed.
+"""
 import html
 import os
+import platform
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -25,16 +31,20 @@ def _when(ts):
 def _keyboard():
     return bot.InlineKeyboardMarkup([
         [bot.InlineKeyboardButton("📊 Overview", callback_data="ap|overview"),
-         bot.InlineKeyboardButton("👥 Users", callback_data="ap|users")],
+         bot.InlineKeyboardButton("📈 Analytics", callback_data="ap|analytics")],
+        [bot.InlineKeyboardButton("👥 Users", callback_data="ap|users"),
+         bot.InlineKeyboardButton("📥 History", callback_data="ap|history")],
         [bot.InlineKeyboardButton("📝 Audit logs", callback_data="ap|logs"),
          bot.InlineKeyboardButton("🖥️ Servers", callback_data="ap|servers")],
-        [bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog")],
         [bot.InlineKeyboardButton("⚙️ Jobs", callback_data="ap|jobs"),
          bot.InlineKeyboardButton("💾 Storage", callback_data="ap|storage")],
         [bot.InlineKeyboardButton("🍪 Cookies", callback_data="ap|cookies"),
-         bot.InlineKeyboardButton("🧹 Cleanup", callback_data="ap|cleanup")],
-        [bot.InlineKeyboardButton("📣 Broadcast help", callback_data="ap|broadcast"),
-         bot.InlineKeyboardButton("🔄 Refresh", callback_data="ap|home")],
+         bot.InlineKeyboardButton("🩺 Health", callback_data="ap|health")],
+        [bot.InlineKeyboardButton("🔧 Runtime", callback_data="ap|runtime"),
+         bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog")],
+        [bot.InlineKeyboardButton("🧹 Cleanup", callback_data="ap|cleanup"),
+         bot.InlineKeyboardButton("📣 Broadcast", callback_data="ap|broadcast")],
+        [bot.InlineKeyboardButton("🔄 Refresh", callback_data="ap|home")],
     ])
 
 def _back():
@@ -42,16 +52,16 @@ def _back():
 
 def _cookie_report():
     rows = []
-    for platform in sorted(bot.PLATFORM_COOKIE_ENV):
-        configured = os.getenv(bot.PLATFORM_COOKIE_ENV[platform], "").strip()
+    for platform_name in sorted(bot.PLATFORM_COOKIE_ENV):
+        configured = os.getenv(bot.PLATFORM_COOKIE_ENV[platform_name], "").strip()
         candidates = [Path(configured)] if configured else []
-        candidates.append(bot.COOKIES_DIR / f"{platform}.txt")
-        if platform == "x":
+        candidates.append(bot.COOKIES_DIR / f"{platform_name}.txt")
+        if platform_name == "x":
             candidates.append(bot.COOKIES_DIR / "twitter.txt")
         if bot.COOKIES_FILE:
             candidates.append(Path(bot.COOKIES_FILE))
         p = next((x for x in candidates if x.is_file()), None)
-        rows.append(f"✅ {platform}: {p.name} ({_size(p.stat().st_size)})" if p else f"⚪ {platform}: not configured")
+        rows.append(f"✅ {platform_name}: {p.name} ({_size(p.stat().st_size)})" if p else f"⚪ {platform_name}: not configured")
     return "\n".join(rows)
 
 def _overview():
@@ -62,20 +72,23 @@ def _overview():
     failed = c.execute("SELECT COUNT(*) FROM history WHERE status='failed'").fetchone()[0]
     events = c.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]
     online = c.execute("SELECT COUNT(*) FROM servers WHERE status='online' AND last_seen>=?", (int(time.time())-90,)).fetchone()[0]
+    announcements = c.execute("SELECT COUNT(*) FROM announcements").fetchone()[0]
     c.close()
     disk = shutil.disk_usage(bot.DOWNLOAD_DIR)
     return (
-        "🛡️ <b>Admin Control Panel</b>\n\n"
+        "🛡️ <b>Advanced Admin Control Panel</b>\n\n"
         f"👥 Users: <b>{users}</b>\n"
         f"📝 Audit events: <b>{events}</b>\n"
-        f"📥 History: <b>{total}</b>\n"
+        f"📥 Download history: <b>{total}</b>\n"
         f"✅ Successful: <b>{success}</b>\n"
         f"❌ Failed: <b>{failed}</b>\n"
+        f"📣 Announcements: <b>{announcements}</b>\n"
         f"🖥️ Servers online: <b>{online}</b>\n"
-        f"📍 This server: <b>{_esc(bot.SERVER_LABEL)}</b>\n"
+        f"📍 Server: <b>{_esc(bot.SERVER_LABEL)}</b>\n"
         f"💾 Free disk: <b>{_size(disk.free)}</b>\n"
         f"🎞️ FFmpeg: <b>{'OK' if shutil.which('ffmpeg') else 'MISSING'}</b>\n"
-        f"📦 yt-dlp: <b>{bot.yt_dlp.version.__version__}</b>"
+        f"📦 yt-dlp: <b>{bot.yt_dlp.version.__version__}</b>\n"
+        f"🤖 Release: <b>{_esc(getattr(__import__('runner'), 'FEATURE_VERSION', 'unknown'))}</b>"
     )
 
 async def panel_cmd(update, context):
@@ -91,21 +104,54 @@ async def panel_callback(update, context):
     await q.answer()
     action = q.data.split("|", 1)[1]
 
-    if action == "home" or action == "overview":
-        return await q.edit_message_text(_overview(), parse_mode="HTML", reply_markup=_keyboard() if action=="home" else _back())
+    if action == "home":
+        return await q.edit_message_text(_overview(), parse_mode="HTML", reply_markup=_keyboard())
+
+    if action == "overview":
+        return await q.edit_message_text(_overview(), parse_mode="HTML", reply_markup=_back())
+
+    if action == "analytics":
+        c = bot.db()
+        rows = c.execute("SELECT status, COUNT(*) FROM history GROUP BY status").fetchall()
+        platform_rows = c.execute(
+            "SELECT CASE WHEN instr(url,'instagram.com')>0 THEN 'Instagram' "
+            "WHEN instr(url,'youtube.com')>0 OR instr(url,'youtu.be')>0 THEN 'YouTube' "
+            "WHEN instr(url,'tiktok.com')>0 THEN 'TikTok' "
+            "WHEN instr(url,'x.com')>0 OR instr(url,'twitter.com')>0 THEN 'X/Twitter' "
+            "WHEN instr(url,'facebook.com')>0 OR instr(url,'fb.watch')>0 THEN 'Facebook' "
+            "ELSE 'Other' END, COUNT(*) FROM history GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+        ).fetchall()
+        total_bytes = c.execute("SELECT COALESCE(SUM(size),0) FROM history WHERE status='success'").fetchone()[0]
+        c.close()
+        lines = ["📈 <b>Download Analytics</b>", "", "<b>Outcomes</b>"]
+        lines += [f"• {_esc(status)}: {count}" for status, count in rows] or ["• No downloads yet"]
+        lines += ["", f"📦 Successful data: <b>{_size(total_bytes)}</b>", "", "<b>Platforms</b>"]
+        lines += [f"• {_esc(name)}: {count}" for name, count in platform_rows] or ["• No platform data yet"]
+        return await q.edit_message_text("\n".join(lines)[:3900], parse_mode="HTML", reply_markup=_back())
 
     if action == "users":
         c = bot.db()
         rows = c.execute("""SELECT u.user_id,u.username,u.first_name,u.last_name,u.last_seen,
-                            (SELECT COUNT(*) FROM audit_logs a WHERE a.user_id=u.user_id AND a.event IN ('link_received','command') AND a.url<>'') AS links
+                            (SELECT COUNT(*) FROM audit_logs a WHERE a.user_id=u.user_id AND a.event IN ('link_received','command') AND a.url<>'') AS links,
+                            (SELECT COUNT(*) FROM history h WHERE h.user_id=u.user_id AND h.status='success') AS success
                             FROM users u ORDER BY u.last_seen DESC LIMIT 20""").fetchall()
         total = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         c.close()
-        lines = [f"👥 <b>Users: {total}</b>", "", "<b>ID | username | name | last seen | links</b>"]
-        for uid, username, first, last, seen, links in rows:
-            name = " ".join(x for x in (first, last) if x) or "—"
-            handle = f"@{username}" if username else "—"
-            lines.append(f"• <code>{uid}</code> | {_esc(handle)} | {_esc(name[:24])} | {_when(seen)} | {links}")
+        lines = [f"👥 <b>Users: {total}</b>", "", "<b>ID | username | last seen | links | success</b>"]
+        for uid, username, first, last, seen, links, success in rows:
+            handle = f"@{username}" if username else ((" ".join(x for x in (first,last) if x))[:18] or "—")
+            lines.append(f"• <code>{uid}</code> | {_esc(handle)} | {_when(seen)} | {links} | {success}")
+        return await q.edit_message_text("\n".join(lines)[:3900], parse_mode="HTML", reply_markup=_back())
+
+    if action == "history":
+        c = bot.db()
+        rows = c.execute("SELECT created_at,user_id,title,status,size,url FROM history ORDER BY id DESC LIMIT 20").fetchall()
+        c.close()
+        lines = ["📥 <b>Recent download history</b>", ""]
+        for ts, uid, title, status, size, url in rows:
+            icon = "✅" if status == "success" else "❌"
+            lines.append(f"{icon} {_when(ts)} | <code>{uid}</code> | {_esc((title or 'unknown')[:45])} | {_size(size)}")
+        if not rows: lines.append("No download history yet.")
         return await q.edit_message_text("\n".join(lines)[:3900], parse_mode="HTML", reply_markup=_back())
 
     if action == "logs":
@@ -113,32 +159,21 @@ async def panel_callback(update, context):
         rows = c.execute("""SELECT created_at,user_id,username,event,url,details,server_id
                             FROM audit_logs ORDER BY id DESC LIMIT 25""").fetchall()
         c.close()
-        lines = ["📝 <b>Recent audit logs</b>", "", "Time | user | event | link/server"]
+        lines = ["📝 <b>Recent audit logs</b>", ""]
         for ts, uid, username, event, url, details, server_id in rows:
-            link = url if url else details
-            if link and len(link) > 90: link = link[:87] + "..."
+            value = url if url else details
+            value = (value[:87] + "...") if value and len(value) > 90 else value
             who = f"@{username}" if username else str(uid)
-            lines.append(f"• {_when(ts)} | <code>{_esc(who)}</code> | <b>{_esc(event)}</b> | server={_esc(server_id)} | {_esc(link)}")
+            lines.append(f"• {_when(ts)} | <code>{_esc(who)}</code> | <b>{_esc(event)}</b> | {_esc(value)}")
         if not rows: lines.append("No audit events yet.")
         return await q.edit_message_text("\n".join(lines)[:3900], parse_mode="HTML", reply_markup=_back())
-
-    if action == "systemlog":
-        log_path = bot.LOG_FILE
-        if not log_path.exists():
-            return await q.edit_message_text("📄 <b>System log</b>\n\nNo log file has been created yet.", parse_mode="HTML", reply_markup=_back())
-        try:
-            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
-        except OSError as exc:
-            return await q.edit_message_text(f"❌ Cannot read log: {_esc(exc)}", reply_markup=_back())
-        text = "📄 <b>Recent system log</b>\n\n<pre>" + _esc("\n".join(lines)) + "</pre>"
-        return await q.edit_message_text(text[-3900:], parse_mode="HTML", reply_markup=_back())
 
     if action == "servers":
         c = bot.db()
         rows = c.execute("SELECT server_id,kind,label,hostname,pid,started_at,last_seen,status FROM servers ORDER BY last_seen DESC").fetchall()
         c.close()
         now = int(time.time())
-        lines = ["🖥️ <b>Bot servers</b>", "", f"Current: <b>{_esc(bot.SERVER_LABEL)}</b>"]
+        lines = ["🖥️ <b>Bot Servers</b>", "", f"Current: <b>{_esc(bot.SERVER_LABEL)}</b>"]
         for sid, kind, label, hostname, pid, started, seen, status in rows:
             live = status == "online" and seen >= now - 90
             state = "🟢 ONLINE" if live else "⚪ OFFLINE"
@@ -150,8 +185,8 @@ async def panel_callback(update, context):
         async with bot.LOCK:
             per_user = {uid: len(jobs) for uid, jobs in bot.JOBS.items() if jobs}
             total = sum(per_user.values())
-        top = sorted(per_user.items(), key=lambda x: x[1], reverse=True)[:10]
-        lines = [f"⚙️ <b>Active jobs: {total}</b>", f"🚦 Global concurrency: {bot.MAX_CONCURRENT_DOWNLOADS}", ""]
+        top = sorted(per_user.items(), key=lambda x: x[1], reverse=True)[:15]
+        lines = [f"⚙️ <b>Active jobs: {total}</b>", f"🚦 Global concurrency: {bot.MAX_CONCURRENT_DOWNLOADS}", f"👤 Paused users: {len(getattr(__import__('runner'), 'PAUSED_USERS', set()))}", ""]
         lines += [f"• <code>{uid}</code>: {count} job(s)" for uid, count in top] or ["No active jobs."]
         return await q.edit_message_text("\n".join(lines), parse_mode="HTML", reply_markup=_back())
 
@@ -161,7 +196,7 @@ async def panel_callback(update, context):
         files = sum(1 for p in bot.DOWNLOAD_DIR.iterdir() if p.is_file()) if bot.DOWNLOAD_DIR.exists() else 0
         cookie_files = sum(1 for p in bot.COOKIES_DIR.glob("*.txt")) if bot.COOKIES_DIR.exists() else 0
         text = ("💾 <b>Storage</b>\n\n"
-                f"Download files: <b>{files}</b>\nDownload directory: <code>{_esc(bot.DOWNLOAD_DIR)}</code>\n"
+                f"Download files: <b>{files}</b>\nDirectory: <code>{_esc(bot.DOWNLOAD_DIR)}</code>\n"
                 f"Database: <b>{_size(db_size)}</b> — <code>{_esc(bot.DB_FILE)}</code>\n"
                 f"Cookie files: <b>{cookie_files}</b> — <code>{_esc(bot.COOKIES_DIR)}</code>\n"
                 f"Free: <b>{_size(d.free)}</b>\nUsed: <b>{_size(d.used)}</b>\n"
@@ -170,10 +205,60 @@ async def panel_callback(update, context):
         return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
 
     if action == "cookies":
-        text = ("🍪 <b>Authorized cookie status</b>\n\n" + _cookie_report() +
-                "\n\n🔐 Cookie contents are never displayed or uploaded by this panel." +
+        text = ("🍪 <b>Authorized Cookie Status</b>\n\n" + _cookie_report() +
+                "\n\n🔐 Cookie contents are never displayed or uploaded." +
                 f"\n📁 Default folder: <code>{_esc(bot.COOKIES_DIR)}</code>")
         return await q.edit_message_text(text[:3900], parse_mode="HTML", reply_markup=_back())
+
+    if action == "health":
+        c = bot.db()
+        db_ok = True
+        try:
+            c.execute("SELECT 1").fetchone()
+            history_count = c.execute("SELECT COUNT(*) FROM history").fetchone()[0]
+            c.close()
+        except Exception:
+            db_ok = False
+            history_count = 0
+        checks = [
+            ("SQLite", db_ok),
+            ("FFmpeg", shutil.which("ffmpeg") is not None),
+            ("Download directory", bot.DOWNLOAD_DIR.exists()),
+            ("Cookie directory", bot.COOKIES_DIR.exists()),
+            ("BOT_TOKEN configured", bool(bot.BOT_TOKEN)),
+            ("yt-dlp", bool(getattr(bot.yt_dlp, "version", None))),
+        ]
+        lines = ["🩺 <b>System Health</b>", ""]
+        lines += [f"{'🟢' if ok else '🔴'} {name}" for name, ok in checks]
+        lines += ["", f"History rows: <b>{history_count}</b>", f"PID: <code>{os.getpid()}</code>"]
+        return await q.edit_message_text("\n".join(lines), parse_mode="HTML", reply_markup=_back())
+
+    if action == "runtime":
+        import runner
+        text = ("🔧 <b>Runtime Configuration</b>\n\n"
+                f"Python: <b>{_esc(sys.version.split()[0])}</b>\n"
+                f"Platform: <b>{_esc(platform.platform())}</b>\n"
+                f"Release: <b>{_esc(runner.FEATURE_VERSION)}</b>\n"
+                f"Server kind: <b>{_esc(bot.SERVER_KIND)}</b>\n"
+                f"Concurrency: <b>{bot.MAX_CONCURRENT_DOWNLOADS}</b>\n"
+                f"Rate limit: <b>{bot.RATE_LIMIT_SECONDS}s</b>\n"
+                f"Playlist max: <b>{bot.PLAYLIST_MAX_ITEMS}</b>\n"
+                f"Telegram chunk: <b>{bot.TELEGRAM_UPLOAD_CHUNK_MB} MB</b>\n"
+                f"JS runtime: <b>{_esc(bot.YTDLP_JS_RUNTIME or 'disabled')}</b>\n"
+                f"Storage backend: <b>{_esc(bot.STORAGE_BACKEND)}</b>\n"
+                "🔐 Secrets are intentionally omitted.")
+        return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
+
+    if action == "systemlog":
+        log_path = bot.LOG_FILE
+        if not log_path.exists():
+            return await q.edit_message_text("📄 <b>System Log</b>\n\nNo log file has been created yet.", parse_mode="HTML", reply_markup=_back())
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
+        except OSError as exc:
+            return await q.edit_message_text(f"❌ Cannot read log: {_esc(exc)}", reply_markup=_back())
+        text = "📄 <b>Recent System Log</b>\n\n<pre>" + _esc("\n".join(lines)) + "</pre>"
+        return await q.edit_message_text(text[-3900:], parse_mode="HTML", reply_markup=_back())
 
     if action == "cleanup":
         removed = 0
@@ -182,12 +267,19 @@ async def panel_callback(update, context):
         for p in bot.DOWNLOAD_DIR.iterdir():
             try:
                 if p.is_file() and p.stat().st_mtime < cutoff:
-                    p.unlink(); removed += 1
+                    p.unlink()
+                    removed += 1
             except OSError:
                 pass
-        return await q.edit_message_text(f"🧹 <b>Cleanup complete</b>\nRemoved stale files: <b>{removed}</b>\nAge threshold: 1 hour.", parse_mode="HTML", reply_markup=_back())
+        return await q.edit_message_text(
+            f"🧹 <b>Cleanup complete</b>\nRemoved stale files: <b>{removed}</b>\nAge threshold: 1 hour.",
+            parse_mode="HTML", reply_markup=_back())
 
     if action == "broadcast":
-        return await q.edit_message_text("📣 <b>Broadcast</b>\n\nUse <code>/announce your message</code>. Broadcasts are stored for audit/history.", parse_mode="HTML", reply_markup=_back())
+        return await q.edit_message_text(
+            "📣 <b>Broadcast Center</b>\n\n"
+            "Use <code>/announce your message</code> to send an announcement to registered users.\n\n"
+            "The broadcast is recorded in the announcements table and delivery failures are ignored safely.",
+            parse_mode="HTML", reply_markup=_back())
 
-    await q.edit_message_text(_overview(), parse_mode="HTML", reply_markup=_keyboard())
+    return await q.edit_message_text(_overview(), parse_mode="HTML", reply_markup=_keyboard())
