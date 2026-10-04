@@ -1,5 +1,19 @@
 # Telegram Video Downloader
 
+## v1.8.0 audit + server monitoring
+
+- `/admin` now opens the protected inline admin control panel.
+- User records include Telegram ID, username, display name, first/last seen timestamps and link counts.
+- Audit logs record message/link activity and download success/failure/cancellation events with date/time and the serving server ID.
+- Server registry/heartbeat shows whether the current Render service or local device is online.
+- Render instances identify themselves from Render environment metadata; local Termux/Linux instances identify by hostname.
+- The database is created locally as `bot.db` by default, with the same schema on Render.
+- Real URL logging can be disabled with `LOG_URLS=0`.
+- Cookies, bot tokens and other secrets are never included in audit records.
+- **Important:** separate Render and local SQLite databases are separate datasets. The panel can show multiple servers only when they share the same database (for example, a future PostgreSQL deployment). Running the same bot token on two servers is still prohibited by Telegram's polling rules.
+
+
+
 ## v1.7.1 reliability update
 
 ### Telegram 409 conflict protection
@@ -124,7 +138,7 @@ This release connects the roadmap features that can safely run in the existing s
 | /cancel | Cancel active jobs |
 | /version | Release/version information |
 | /terms | Beta/legal-use notice |
-| /admin | Basic admin dashboard |\n| /panel | Powerful inline admin control panel |
+| /admin | Protected full inline admin panel |\n| /panel | Same protected inline admin panel |
 
 Admin-only commands include `/panel`, `/cleanup` and `/announce <message>`. Set `ADMIN_USER_IDS` first. The panel is Telegram-native and restricted by numeric Telegram user ID.
 
@@ -151,6 +165,10 @@ DEFAULT_AUDIO_QUALITY=192
 
 # Optional
 ADMIN_USER_IDS=123456789
+
+LOG_URLS=1
+SERVER_HEARTBEAT_INTERVAL=30
+# Optional: SERVER_NAME=My Termux phone
 
 COOKIES_DIR=cookies
 # Optional explicit override:
@@ -294,4 +312,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.7.1**
+**Testing / Beta — v1.8.0**
