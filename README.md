@@ -25,7 +25,7 @@
 - Large media has no application-side duration/size cap by default. Files above the configured Telegram upload chunk size are automatically split with FFmpeg and delivered in parts.
 - `STORAGE_QUOTA_GB=0` means no application quota; physical disk/object-storage capacity still applies.
 - `KEEP_MEDIA=1` enables local archive retention. On Render Free, local files remain ephemeral and are lost on restart/redeploy/spin-down.
-- Authorized browser-cookie loading is supported locally with `COOKIES_FROM_BROWSER`; fake cookies cannot authenticate private stories/posts.
+- Authorized browser-cookie loading is supported locally with `COOKIES_FROM_BROWSER` for supported platforms.
 - A non-authentic cookie syntax example is included under `cookies/examples/dummy.txt`.
 
 ### Important platform limits
@@ -94,7 +94,7 @@ A self-hosted Telegram media downloader built with Python, python-telegram-bot, 
 ## v1.5.0 feature update
 
 ### Per-platform authorized cookies
-- Separate cookie jars for YouTube, Instagram, Facebook, TikTok, X/Twitter, Reddit, Vimeo, Dailymotion, Snapchat, Pinterest, LinkedIn, Twitch, Threads and Telegram.
+- Separate cookie jars for Facebook, TikTok, X/Twitter, Reddit, Vimeo, Dailymotion, Snapchat, Pinterest, LinkedIn, Twitch, Threads and Telegram.
 - Automatic platform detection selects only the matching cookie jar.
 - Custom COOKIES_<PLATFORM> environment variables can override cookies/<platform>.txt.
 - Legacy COOKIES_FILE remains available as a fallback.
@@ -151,6 +151,10 @@ This release connects the roadmap features that can safely run in the existing s
 - GitHub Actions validation
 - Existing-user update scripts
 - Environment and cookie preservation during updates
+
+## Disabled platforms
+
+The bot intentionally rejects **YouTube/YouTube Shorts** and **Instagram/Reels** URLs. They are removed from platform detection, cookie configuration, download execution, and Render configuration.
 
 ## Commands
 
@@ -216,9 +220,6 @@ COOKIES_DIR=cookies
 # Optional local authorized browser session:
 # COOKIES_FROM_BROWSER=firefox
 # COOKIES_FROM_BROWSER_PROFILE=/path/to/profile
-# Optional explicit override:
-# COOKIES_INSTAGRAM=/secure/path/instagram.txt
-# COOKIES_YOUTUBE=/secure/path/youtube.txt
 
 YTDLP_MAX_ATTEMPTS=3
 YTDLP_RETRY_DELAY=2
@@ -271,8 +272,6 @@ python runner.py
 The tracked `cookies/README.md` contains the full folder layout. In a normal checkout, put authorized cookie jars here:
 
 ~~~text
-cookies/youtube.txt
-cookies/instagram.txt
 cookies/facebook.txt
 cookies/tiktok.txt
 cookies/x.txt
@@ -301,8 +300,8 @@ For cookies on the Docker-based Render deployment, use Render **Secret Files**, 
 Recommended setup:
 
 1. Open the Render service → **Environment** → **Secret Files** → **Add Secret File**.
-2. Upload/paste each authorized Netscape cookie jar with names such as `youtube.txt`, `instagram.txt`, `facebook.txt`, `tiktok.txt`, and `x.txt`.
-3. The included `render.yaml` already maps these to `COOKIES_YOUTUBE=/etc/secrets/youtube.txt`, etc.
+2. Upload/paste only authorized cookie jars for supported platforms, such as `facebook.txt`, `tiktok.txt`, and `x.txt`.
+3. The included `render.yaml` maps the supported platform cookie files to Render Secret Files.
 4. Save/deploy. The bot will detect the matching cookie file automatically.
 5. Check **/panel → 🍪 Cookies** to see presence and file size only; cookie values are never shown.
 
