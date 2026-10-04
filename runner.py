@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Production runner with robust yt-dlp handling and roadmap feature extensions."""
 import asyncio, logging, os, random, time
+import httpx
 from pathlib import Path
 import yt_dlp
 import bot
 import admin_panel
+from telegram.error import NetworkError, RetryAfter, TimedOut
+from telegram.request import HTTPXRequest
 
 log = logging.getLogger("telegram-video-downloader.runner")
 MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
@@ -13,7 +16,71 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.6.0"
+FEATURE_VERSION = "1.7.0"
+
+# Telegram Bot API network hardening.
+TG_CONNECT_TIMEOUT = max(5.0, float(os.getenv("TG_CONNECT_TIMEOUT", "20")))
+TG_READ_TIMEOUT = max(10.0, float(os.getenv("TG_READ_TIMEOUT", "45")))
+TG_WRITE_TIMEOUT = max(20.0, float(os.getenv("TG_WRITE_TIMEOUT", "90")))
+TG_POOL_TIMEOUT = max(5.0, float(os.getenv("TG_POOL_TIMEOUT", "20")))
+TG_MEDIA_WRITE_TIMEOUT = max(30.0, float(os.getenv("TG_MEDIA_WRITE_TIMEOUT", "180")))
+TG_CONNECTION_POOL = max(8, int(os.getenv("TG_CONNECTION_POOL", "32")))
+TG_HTTP_RETRIES = max(0, int(os.getenv("TG_HTTP_RETRIES", "3")))
+TG_UPDATES_TIMEOUT = max(10, int(os.getenv("TG_UPDATES_TIMEOUT", "35")))
+WATCHDOG_INTERVAL = max(30, int(os.getenv("TG_WATCHDOG_INTERVAL", "60")))
+
+
+def make_telegram_request(*, read_timeout, write_timeout, connection_pool_size):
+    return HTTPXRequest(
+        connection_pool_size=connection_pool_size,
+        read_timeout=read_timeout,
+        write_timeout=write_timeout,
+        connect_timeout=TG_CONNECT_TIMEOUT,
+        pool_timeout=TG_POOL_TIMEOUT,
+        media_write_timeout=TG_MEDIA_WRITE_TIMEOUT,
+        http_version="1.1",
+        httpx_kwargs={"transport": httpx.AsyncHTTPTransport(retries=TG_HTTP_RETRIES)},
+    )
+
+
+async def telegram_watchdog(app):
+    """Periodically verify Telegram API reachability."""
+    while True:
+        await asyncio.sleep(WATCHDOG_INTERVAL)
+        started = time.monotonic()
+        try:
+            me = await app.bot.get_me(
+                read_timeout=TG_READ_TIMEOUT,
+                connect_timeout=TG_CONNECT_TIMEOUT,
+                pool_timeout=TG_POOL_TIMEOUT,
+            )
+            log.info("Telegram watchdog: online as @%s (%.2fs)",
+                     me.username or me.id, time.monotonic() - started)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("Telegram watchdog: connection check failed: %s", error_text(exc))
+
+
+async def post_init(app):
+    app.bot_data["telegram_watchdog_task"] = asyncio.create_task(telegram_watchdog(app))
+
+
+async def post_shutdown(app):
+    task = app.bot_data.pop("telegram_watchdog_task", None)
+    if task:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def telegram_error_handler(update, context):
+    exc = context.error
+    if isinstance(exc, RetryAfter):
+        log.warning("Telegram API rate limit; retry after %s seconds", exc.retry_after)
+    elif isinstance(exc, (TimedOut, NetworkError)):
+        log.warning("Telegram API network error; request/polling layer will retry: %s", error_text(exc))
+    else:
+        log.exception("Unhandled Telegram update error", exc_info=exc)
 
 def error_text(exc):
     return " ".join(str(exc).replace("\n"," ").split())[:1000]
@@ -93,8 +160,8 @@ async def robust_download_media(url, audio_only=False, progress_hook=None, profi
 bot.sync_download = robust_sync_download
 bot.sync_quality_download = robust_sync_quality_download
 bot.download_media = robust_download_media
-bot.format_for_quality = getattr(bot, "format_for_quality", bot.fmt)
-bot.locate_result = getattr(bot, "locate_result", bot.locate)
+bot.format_for_quality = getattr(bot, "format_for_quality", getattr(bot, "fmt", None))
+bot.locate_result = getattr(bot, "locate_result", getattr(bot, "locate", None))
 
 async def analyze_cmd(update, context):
     urls = [bot.clean_url(x) for x in bot.URL_RE.findall(" ".join(context.args))]
@@ -202,7 +269,34 @@ def ensure_feature_schema():
 def main():
     if not bot.BOT_TOKEN: raise SystemExit("BOT_TOKEN is not set")
     bot.db(); ensure_feature_schema()
-    app = bot.Application.builder().token(bot.BOT_TOKEN).build()
+    request = make_telegram_request(
+        read_timeout=TG_READ_TIMEOUT,
+        write_timeout=TG_WRITE_TIMEOUT,
+        connection_pool_size=TG_CONNECTION_POOL,
+    )
+    updates_request = make_telegram_request(
+        read_timeout=TG_UPDATES_TIMEOUT + 10,
+        write_timeout=30,
+        connection_pool_size=4,
+    )
+    app = (bot.Application.builder()
+           .token(bot.BOT_TOKEN)
+           .request(request)
+           .get_updates_request(updates_request)
+           .get_updates_connection_pool_size(4)
+           .get_updates_read_timeout(TG_UPDATES_TIMEOUT + 10)
+           .get_updates_write_timeout(30)
+           .get_updates_connect_timeout(TG_CONNECT_TIMEOUT)
+           .get_updates_pool_timeout(TG_POOL_TIMEOUT)
+           .connection_pool_size(TG_CONNECTION_POOL)
+           .connect_timeout(TG_CONNECT_TIMEOUT)
+           .read_timeout(TG_READ_TIMEOUT)
+           .write_timeout(TG_WRITE_TIMEOUT)
+           .pool_timeout(TG_POOL_TIMEOUT)
+           .post_init(post_init)
+           .post_shutdown(post_shutdown)
+           .build())
+    app.add_error_handler(telegram_error_handler)
     commands = {
         "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
         "status": bot.status_cmd, "queue": queue_cmd, "pause": pause_cmd, "resume": resume_cmd,
@@ -226,7 +320,7 @@ def main():
                         secret_token=bot.WEBHOOK_SECRET or None, drop_pending_updates=True,
                         allowed_updates=bot.Update.ALL_TYPES, max_connections=20)
     else:
-        app.run_polling(allowed_updates=bot.Update.ALL_TYPES, drop_pending_updates=True)
+        app.run_polling(allowed_updates=bot.Update.ALL_TYPES, drop_pending_updates=True, timeout=TG_UPDATES_TIMEOUT, bootstrap_retries=-1, poll_interval=0.5)
 
 if __name__ == "__main__":
     main()
