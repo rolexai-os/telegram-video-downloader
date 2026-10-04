@@ -1,5 +1,14 @@
 # Telegram Video Downloader
 
+## v1.11.3 automatic link detection
+
+- Sending a normal URL directly to the bot automatically queues the download; no command is required.
+- Telegram clickable text links (`TEXT_LINK`) are detected even when the URL is hidden behind formatted text.
+- URLs in photo/video/document captions are detected automatically.
+- `www.example.com/...` links are normalized to HTTPS before download.
+- Multiple links in one message remain supported and are deduplicated.
+
+
 ## v1.11.1 Docker/Render build fix
 
 - The Docker image now installs `unzip` before running the official Deno installer.
