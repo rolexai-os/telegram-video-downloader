@@ -164,7 +164,9 @@ async def panel_callback(update, context):
                 f"Download files: <b>{files}</b>\nDownload directory: <code>{_esc(bot.DOWNLOAD_DIR)}</code>\n"
                 f"Database: <b>{_size(db_size)}</b> — <code>{_esc(bot.DB_FILE)}</code>\n"
                 f"Cookie files: <b>{cookie_files}</b> — <code>{_esc(bot.COOKIES_DIR)}</code>\n"
-                f"Free: <b>{_size(d.free)}</b>\nUsed: <b>{_size(d.used)}</b>")
+                f"Free: <b>{_size(d.free)}</b>\nUsed: <b>{_size(d.used)}</b>\n"
+                f"App quota: <b>{'unlimited' if bot.STORAGE_QUOTA_GB == 0 else str(bot.STORAGE_QUOTA_GB) + ' GB'}</b>\n"
+                f"Retention: <b>{'kept' if bot.KEEP_MEDIA else 'delivery-only'}</b>\nBackend: <b>{_esc(bot.STORAGE_BACKEND)}</b>")
         return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
 
     if action == "cookies":
