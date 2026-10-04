@@ -445,17 +445,16 @@ async def quality_callback(update,context):
         file_path=await download(url,audio,hook,chosen,captions)
         if not file_path or not file_path.exists():raise RuntimeError("No media file was produced")
         n=file_path.stat().st_size
-        if n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above {MAX_FILE_SIZE_MB} MB")
+        if MAX_FILE_SIZE and n>MAX_FILE_SIZE:raise RuntimeError(f"File is {size_text(n)}, above the configured {MAX_FILE_SIZE_MB} MB limit")
         await q.edit_message_text("📤 Uploading…")
-        await send_media(q.message,file_path,audio,f'✅ {file_path.stem}')
-        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem)
         await send_media(q.message,file_path,audio,f"✅ {file_path.stem}")
+        history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem)
     except asyncio.CancelledError:history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url);await q.edit_message_text("🛑 Cancelled.")
     except Exception as exc:
         history(uid,url,"","failed");audit_event(q.from_user,"download_failed",url,user_error_message(exc));logger.exception("quality download failed")
         await q.edit_message_text(user_error_message(exc))
     finally:
-        if file_path and file_path.exists():
+        if file_path and file_path.exists() and not KEEP_MEDIA:
             try:file_path.unlink()
             except OSError:pass
         await unregister(uid,task)
