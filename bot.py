@@ -30,6 +30,8 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
+COOKIES_FROM_BROWSER=os.getenv("COOKIES_FROM_BROWSER","").strip()
+COOKIES_FROM_BROWSER_PROFILE=os.getenv("COOKIES_FROM_BROWSER_PROFILE","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
 TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
 STORAGE_QUOTA_GB=max(0,float(os.getenv("STORAGE_QUOTA_GB","0")))
@@ -171,8 +173,26 @@ def user_error_message(exc):
 def cookie_platform(url):
     host=urlparse(url).netloc.lower().split(":")[0]
     if host.startswith("www."): host=host[4:]
-    mapping={"youtube.com":"youtube","youtu.be":"youtube","instagram.com":"instagram","facebook.com":"facebook","fb.watch":"facebook","tiktok.com":"tiktok","x.com":"x","twitter.com":"x","reddit.com":"reddit","v.redd.it":"reddit","vimeo.com":"vimeo","dailymotion.com":"dailymotion","snapchat.com":"snapchat","pinterest.com":"pinterest","linkedin.com":"linkedin","twitch.tv":"twitch","threads.net":"threads","telegram.me":"telegram","t.me":"telegram"}
-    return mapping.get(host,"generic")
+    groups={
+        "youtube":("youtube.com","youtu.be","youtube-nocookie.com"),
+        "instagram":("instagram.com","instagr.am"),
+        "facebook":("facebook.com","fb.watch"),
+        "tiktok":("tiktok.com","vm.tiktok.com","vt.tiktok.com"),
+        "x":("x.com","twitter.com","t.co"),
+        "reddit":("reddit.com","v.redd.it"),
+        "vimeo":("vimeo.com",),
+        "dailymotion":("dailymotion.com",),
+        "snapchat":("snapchat.com",),
+        "pinterest":("pinterest.com",),
+        "linkedin":("linkedin.com",),
+        "twitch":("twitch.tv",),
+        "threads":("threads.net",),
+        "telegram":("telegram.me","t.me"),
+    }
+    for platform, suffixes in groups.items():
+        if any(host==suffix or host.endswith("."+suffix) for suffix in suffixes):
+            return platform
+    return "generic"
 
 def cookie_file_for_url(url):
     platform=cookie_platform(url)
@@ -204,7 +224,11 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
     cookie_file=cookie_file_for_url(url) if url else None
-    if cookie_file:o["cookiefile"]=str(cookie_file)
+    if cookie_file:
+        o["cookiefile"]=str(cookie_file)
+    elif COOKIES_FROM_BROWSER:
+        browser=COOKIES_FROM_BROWSER
+        o["cookiesfrombrowser"]=(browser,COOKIES_FROM_BROWSER_PROFILE or None)
     return o
 
 
