@@ -28,7 +28,7 @@ def _keyboard():
          bot.InlineKeyboardButton("👥 Users", callback_data="ap|users")],
         [bot.InlineKeyboardButton("📝 Audit logs", callback_data="ap|logs"),
          bot.InlineKeyboardButton("🖥️ Servers", callback_data="ap|servers")],
-        [bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog"),
+        [bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog")],
         [bot.InlineKeyboardButton("⚙️ Jobs", callback_data="ap|jobs"),
          bot.InlineKeyboardButton("💾 Storage", callback_data="ap|storage")],
         [bot.InlineKeyboardButton("🍪 Cookies", callback_data="ap|cookies"),
@@ -97,7 +97,7 @@ async def panel_callback(update, context):
     if action == "users":
         c = bot.db()
         rows = c.execute("""SELECT u.user_id,u.username,u.first_name,u.last_name,u.last_seen,
-                            (SELECT COUNT(*) FROM audit_logs a WHERE a.user_id=u.user_id AND a.event='message' AND a.url<>'') AS links
+                            (SELECT COUNT(*) FROM audit_logs a WHERE a.user_id=u.user_id AND a.event IN ('link_received','command') AND a.url<>'') AS links
                             FROM users u ORDER BY u.last_seen DESC LIMIT 20""").fetchall()
         total = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         c.close()
