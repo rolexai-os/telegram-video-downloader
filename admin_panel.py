@@ -26,8 +26,9 @@ def _keyboard():
     return bot.InlineKeyboardMarkup([
         [bot.InlineKeyboardButton("📊 Overview", callback_data="ap|overview"),
          bot.InlineKeyboardButton("👥 Users", callback_data="ap|users")],
-        [bot.InlineKeyboardButton("📝 Logs", callback_data="ap|logs"),
+        [bot.InlineKeyboardButton("📝 Audit logs", callback_data="ap|logs"),
          bot.InlineKeyboardButton("🖥️ Servers", callback_data="ap|servers")],
+        [bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog"),
         [bot.InlineKeyboardButton("⚙️ Jobs", callback_data="ap|jobs"),
          bot.InlineKeyboardButton("💾 Storage", callback_data="ap|storage")],
         [bot.InlineKeyboardButton("🍪 Cookies", callback_data="ap|cookies"),
@@ -117,9 +118,20 @@ async def panel_callback(update, context):
             link = url if url else details
             if link and len(link) > 90: link = link[:87] + "..."
             who = f"@{username}" if username else str(uid)
-            lines.append(f"• {_when(ts)} | <code>{_esc(who)}</code> | <b>{_esc(event)}</b> | {_esc(link)}")
+            lines.append(f"• {_when(ts)} | <code>{_esc(who)}</code> | <b>{_esc(event)}</b> | server={_esc(server_id)} | {_esc(link)}")
         if not rows: lines.append("No audit events yet.")
         return await q.edit_message_text("\n".join(lines)[:3900], parse_mode="HTML", reply_markup=_back())
+
+    if action == "systemlog":
+        log_path = bot.LOG_FILE
+        if not log_path.exists():
+            return await q.edit_message_text("📄 <b>System log</b>\n\nNo log file has been created yet.", parse_mode="HTML", reply_markup=_back())
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
+        except OSError as exc:
+            return await q.edit_message_text(f"❌ Cannot read log: {_esc(exc)}", reply_markup=_back())
+        text = "📄 <b>Recent system log</b>\n\n<pre>" + _esc("\n".join(lines)) + "</pre>"
+        return await q.edit_message_text(text[-3900:], parse_mode="HTML", reply_markup=_back())
 
     if action == "servers":
         c = bot.db()
