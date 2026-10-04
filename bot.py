@@ -48,7 +48,7 @@ PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
 COOKIES_FILE=os.getenv("COOKIES_FILE","").strip()
 COOKIES_DIR=Path(os.getenv("COOKIES_DIR","cookies"))
-PLATFORM_COOKIE_ENV={"youtube":"COOKIES_YOUTUBE","instagram":"COOKIES_INSTAGRAM","facebook":"COOKIES_FACEBOOK","tiktok":"COOKIES_TIKTOK","x":"COOKIES_X","reddit":"COOKIES_REDDIT","vimeo":"COOKIES_VIMEO","dailymotion":"COOKIES_DAILYMOTION","snapchat":"COOKIES_SNAPCHAT","pinterest":"COOKIES_PINTEREST","linkedin":"COOKIES_LINKEDIN","twitch":"COOKIES_TWITCH","threads":"COOKIES_THREADS","telegram":"COOKIES_TELEGRAM","generic":"COOKIES_GENERIC"}
+PLATFORM_COOKIE_ENV={"facebook":"COOKIES_FACEBOOK","tiktok":"COOKIES_TIKTOK","x":"COOKIES_X","reddit":"COOKIES_REDDIT","vimeo":"COOKIES_VIMEO","dailymotion":"COOKIES_DAILYMOTION","snapchat":"COOKIES_SNAPCHAT","pinterest":"COOKIES_PINTEREST","linkedin":"COOKIES_LINKEDIN","twitch":"COOKIES_TWITCH","threads":"COOKIES_THREADS","telegram":"COOKIES_TELEGRAM","generic":"COOKIES_GENERIC"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
@@ -57,6 +57,16 @@ logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(m
 logger=logging.getLogger("telegram-video-downloader")
 GLOBAL_SEMAPHORE=asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS); JOBS={}; LAST_REQUEST={}; QUALITY_REQUESTS={}; LOCK=asyncio.Lock()
 URL_RE=re.compile(r"https?://[^\s<>\"]+|www\.[^\s<>\"]+",re.I)
+DISABLED_HOSTS=("youtube.com","youtu.be","youtube-nocookie.com","instagram.com","instagr.am")
+
+def is_disabled_url(url):
+    host=urlparse(url).netloc.lower().split(":")[0]
+    if host.startswith("www."): host=host[4:]
+    return any(host==suffix or host.endswith("."+suffix) for suffix in DISABLED_HOSTS)
+
+def ensure_supported_url(url):
+    if is_disabled_url(url):
+        raise ValueError("This platform is disabled in the current bot release")
 
 def extract_message_urls(message):
     """Extract visible and Telegram-embedded URLs from text or media captions."""
@@ -75,7 +85,7 @@ def extract_message_urls(message):
     for url in urls:
         if not url: continue
         if url.startswith("www."): url="https://"+url
-        if url.startswith(("http://","https://")) and url not in seen:
+        if url.startswith(("http://","https://")) and url not in seen and not is_disabled_url(url):
             seen.add(url); result.append(url)
     return result
 
@@ -187,6 +197,8 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
+    if "disabled in the current bot release" in s:
+        return "⚠️ This platform is currently disabled in this bot version."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "ffmpeg" in s:
@@ -201,8 +213,6 @@ def cookie_platform(url):
     host=urlparse(url).netloc.lower().split(":")[0]
     if host.startswith("www."): host=host[4:]
     groups={
-        "youtube":("youtube.com","youtu.be","youtube-nocookie.com"),
-        "instagram":("instagram.com","instagr.am"),
         "facebook":("facebook.com","fb.watch"),
         "tiktok":("tiktok.com","vm.tiktok.com","vt.tiktok.com"),
         "x":("x.com","twitter.com","t.co"),
@@ -270,6 +280,7 @@ def locate(ydl,info,audio=False):
 
 
 def sync_download(url,audio=False,hook=None,profile="best",captions=False):
+    ensure_supported_url(url)
     ext="mp3" if audio else "%(ext)s"; template=str(DOWNLOAD_DIR/f"%(title).180B [%(id)s].{ext}")
     with yt_dlp.YoutubeDL(opts(template,audio,profile,captions,hook,url=url)) as y:
         info=y.extract_info(url,download=True); info=next((x for x in info.get("entries",[]) if x),None) if info and info.get("entries") else info
