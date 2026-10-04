@@ -176,7 +176,12 @@ At minimum:
 BOT_TOKEN=YOUR_BOTFATHER_TOKEN
 DOWNLOAD_DIR=downloads
 DB_FILE=bot.db
-MAX_FILE_SIZE_MB=49
+MAX_FILE_SIZE_MB=0
+TELEGRAM_UPLOAD_CHUNK_MB=45
+STORAGE_QUOTA_GB=0
+STORAGE_BACKEND=local
+KEEP_MEDIA=0
+APP_LOG_FILE=bot.log
 MAX_CONCURRENT_DOWNLOADS=4
 MAX_LINKS_PER_MESSAGE=0
 MAX_QUEUE_PER_USER=0
@@ -193,6 +198,9 @@ SERVER_HEARTBEAT_INTERVAL=30
 # Optional: SERVER_NAME=My Termux phone
 
 COOKIES_DIR=cookies
+# Optional local authorized browser session:
+# COOKIES_FROM_BROWSER=firefox
+# COOKIES_FROM_BROWSER_PROFILE=/path/to/profile
 # Optional explicit override:
 # COOKIES_INSTAGRAM=/secure/path/instagram.txt
 # COOKIES_YOUTUBE=/secure/path/youtube.txt
