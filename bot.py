@@ -101,8 +101,10 @@ def db():
     c.execute("CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,username TEXT DEFAULT '',event TEXT,url TEXT DEFAULT '',details TEXT DEFAULT '',server_id TEXT DEFAULT '',created_at INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS servers(server_id TEXT PRIMARY KEY,kind TEXT,label TEXT,hostname TEXT,pid INTEGER,started_at INTEGER,last_seen INTEGER,status TEXT)")
     c.execute("CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY,added_by INTEGER DEFAULT 0,created_at INTEGER)")
-    for admin_id in sorted(ADMIN_USER_IDS):
-        c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(admin_id,0,int(time.time())))
+    admin_count=c.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+    if admin_count == 0:
+        for admin_id in sorted(ADMIN_USER_IDS):
+            c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(admin_id,0,int(time.time())))
     rows=c.execute("SELECT user_id FROM admins").fetchall()
     ADMIN_USER_IDS.clear(); ADMIN_USER_IDS.update(int(row[0]) for row in rows)
     for column, definition in (("username","TEXT DEFAULT ''"),("first_name","TEXT DEFAULT ''"),("last_name","TEXT DEFAULT ''")):
