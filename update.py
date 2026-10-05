@@ -2,8 +2,8 @@
 """Safe updater for existing Git-based installations.
 
 Usage: python update.py
-The local .env is preserved. Legacy credential/session files are intentionally removed
-because this release no longer supports cookie or browser-session imports.
+The local .env is preserved. Legacy credential/session files are intentionally
+removed because this release no longer supports cookie or browser-session imports.
 """
 
 import os
@@ -36,9 +36,9 @@ def main():
 
     backup = ROOT / f".update-backup-{local[:7]}"
     backup.mkdir(exist_ok=True)
-    for name in (".env",):
-        src = ROOT / name
-        if src.is_file(): shutil.copy2(src, backup / name)
+    src = ROOT / ".env"
+    if src.is_file():
+        shutil.copy2(src, backup / ".env")
 
     dirty = subprocess.run(["git", "diff", "--quiet"], cwd=ROOT).returncode != 0
     cached = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0
@@ -49,14 +49,16 @@ def main():
     print(f"⬇️ Updating {local[:7]} → {remote[:7]}")
     run("git", "pull", "--ff-only", "origin", BRANCH)
 
-    for name in (".env",):
-        saved = backup / name
-        if saved.is_file() and not (ROOT / name).exists(): shutil.copy2(saved, ROOT / name)
+    saved = backup / ".env"
+    if saved.is_file() and not (ROOT / ".env").exists():
+        shutil.copy2(saved, ROOT / ".env")
 
     for legacy in (ROOT / "cookies.txt", ROOT / "cookies"):
         try:
-            if legacy.is_dir(): shutil.rmtree(legacy)
-            elif legacy.exists(): legacy.unlink()
+            if legacy.is_dir():
+                shutil.rmtree(legacy)
+            elif legacy.exists():
+                legacy.unlink()
         except OSError as exc:
             print(f"⚠️ Could not remove legacy credential data {legacy}: {exc}")
 
@@ -67,6 +69,7 @@ def main():
         run(sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt")
 
     print(f"✅ Update completed: {remote[:7]}")
+    print("Legacy cookie/session data has been removed.")
     print("Restart the bot/application to load the new version.")
     return 0
 
