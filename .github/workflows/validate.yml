@@ -83,7 +83,7 @@ jobs:
           grep -q 'audit_update' runner.py
           grep -q 'systemlog' admin_panel.py
           grep -q 'privacy' admin_panel.py
-          ! grep -RniE 'COOKIES_|cookie_file_for_url|cookiesfrombrowser|cookie_platform' bot.py runner.py admin_panel.py
+          ! grep -RniE 'COOKIES_|cookie_file_for_url|cookiesfrombrowser|cookiefile|cookie_platform' bot.py runner.py admin_panel.py
           grep -q 'analytics' admin_panel.py
           grep -q 'health' admin_panel.py
           grep -q 'runtime' admin_panel.py
