@@ -46,9 +46,9 @@ If you believe the bot or this repository is being used in a way that infringes 
 
 Do not submit passwords, session tokens, private cookies, API keys, or other secrets through Telegram messages or public repository issues.
 
-The self-hosted configuration supports an optional cookies file. Operators must use only cookies they are authorized to use and must protect that file from disclosure.
+This project does not accept, import, store, or use browser cookies, session-cookie files, or browser login profiles. Authentication-required media is skipped rather than using stored sessions.
 
-The repository is configured to ignore `.env` and cookie files. Never commit real credentials.
+Never submit passwords, session tokens, browser profiles, API keys, or other credentials through Telegram or public repository issues.
 
 ## 7. No warranty
 
