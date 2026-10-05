@@ -20,7 +20,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.15.0"
+FEATURE_VERSION = "1.16.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -145,6 +145,9 @@ ADMIN_COMMANDS = PUBLIC_COMMANDS + [
     BotCommand("panel","Open admin dashboard"),
     BotCommand("cleanup","Remove stale files"),
     BotCommand("announce","Broadcast an announcement"),
+    BotCommand("admins","List administrators"),
+    BotCommand("adminadd","Add an administrator"),
+    BotCommand("adminremove","Remove an administrator"),
 ]
 
 
@@ -339,8 +342,50 @@ async def stats_cmd(update, context):
     c.close()
     await update.effective_message.reply_text(f"📈 Personal statistics\nTotal: {total}\nSuccessful: {ok}\nFailed: {failed}\nData: {bot.size_text(size)}")
 
+async def admins_cmd(update, context):
+    if not bot.is_admin(update.effective_user.id):
+        return await update.effective_message.reply_text("❌ Admin only.")
+    rows=bot.admin_list()
+    lines=["🛡️ <b>Administrators</b>","",f"Total: <b>{len(rows)}</b>"]
+    lines += [f"• <code>{admin_id}</code>" for admin_id,_,_ in rows]
+    lines.append("")
+    lines.append("Use /adminadd <Telegram ID> or /adminremove <Telegram ID>.")
+    await update.effective_message.reply_text("\n".join(lines),parse_mode="HTML")
+
+async def adminadd_cmd(update, context):
+    if not bot.is_admin(update.effective_user.id):
+        return await update.effective_message.reply_text("❌ Admin only.")
+    if not context.args or not context.args[0].isdigit():
+        return await update.effective_message.reply_text("Usage: /adminadd <Telegram ID>")
+    target=int(context.args[0])
+    if target <= 0:
+        return await update.effective_message.reply_text("❌ Invalid Telegram ID.")
+    added=bot.add_admin(target, update.effective_user.id)
+    if not added:
+        return await update.effective_message.reply_text(f"ℹ️ <code>{target}</code> is already an administrator.",parse_mode="HTML")
+    try:
+        await context.bot.set_my_commands(ADMIN_COMMANDS, scope=BotCommandScopeChat(target))
+    except Exception as exc:
+        log.warning("Could not set admin command menu for %s: %s", target, error_text(exc))
+    bot.audit_event(update.effective_user,"admin_added",details=f"target={target}")
+    await update.effective_message.reply_text(f"✅ Administrator added: <code>{target}</code>",parse_mode="HTML")
+
+async def adminremove_cmd(update, context):
+    if not bot.is_admin(update.effective_user.id):
+        return await update.effective_message.reply_text("❌ Admin only.")
+    if not context.args or not context.args[0].isdigit():
+        return await update.effective_message.reply_text("Usage: /adminremove <Telegram ID>")
+    target=int(context.args[0])
+    if target == update.effective_user.id:
+        return await update.effective_message.reply_text("❌ You cannot remove yourself. Another administrator must do that.")
+    ok,message=bot.remove_admin(target)
+    if not ok:
+        return await update.effective_message.reply_text(f"❌ {message}")
+    bot.audit_event(update.effective_user,"admin_removed",details=f"target={target}")
+    await update.effective_message.reply_text(f"✅ Administrator removed: <code>{target}</code>",parse_mode="HTML")
+
 async def cleanup_cmd(update, context):
-    if update.effective_user.id not in bot.ADMIN_USER_IDS:
+    if not bot.is_admin(update.effective_user.id):
         return await update.effective_message.reply_text("❌ Admin only.")
     removed = 0
     for p in bot.DOWNLOAD_DIR.iterdir():
@@ -403,7 +448,7 @@ def main():
         "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
         "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
         "stats": stats_cmd, "version": version_cmd, "admin": admin_panel.panel_cmd,
-        "cleanup": cleanup_cmd, "announce": announce_cmd, "panel": admin_panel.panel_cmd,
+        "cleanup": cleanup_cmd, "announce": announce_cmd, "panel": admin_panel.panel_cmd, "admins": admins_cmd, "adminadd": adminadd_cmd, "adminremove": adminremove_cmd,
     }
     for name, fn in commands.items(): app.add_handler(bot.CommandHandler(name, fn))
     app.add_handler(bot.CallbackQueryHandler(admin_panel.panel_callback, pattern=admin_panel.PANEL_PATTERN))
