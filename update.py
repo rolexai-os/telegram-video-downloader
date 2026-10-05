@@ -2,8 +2,8 @@
 """Safe updater for existing Git-based installations.
 
 Usage: python update.py
-Secrets such as .env and cookies.txt are preserved locally and are never fetched
-from GitHub by this script.
+The local .env is preserved. Legacy credential/session files are intentionally removed
+because this release no longer supports cookie or browser-session imports.
 """
 
 import os
@@ -36,14 +36,9 @@ def main():
 
     backup = ROOT / f".update-backup-{local[:7]}"
     backup.mkdir(exist_ok=True)
-    for name in (".env", "cookies.txt"):
+    for name in (".env",):
         src = ROOT / name
-        if src.is_file():
-            shutil.copy2(src, backup / name)
-
-    cookie_dir = ROOT / os.getenv("COOKIES_DIR", "cookies")
-    if cookie_dir.is_dir():
-        shutil.copytree(cookie_dir, backup / "cookies", dirs_exist_ok=True)
+        if src.is_file(): shutil.copy2(src, backup / name)
 
     dirty = subprocess.run(["git", "diff", "--quiet"], cwd=ROOT).returncode != 0
     cached = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0
@@ -54,16 +49,16 @@ def main():
     print(f"⬇️ Updating {local[:7]} → {remote[:7]}")
     run("git", "pull", "--ff-only", "origin", BRANCH)
 
-    for name in (".env", "cookies.txt"):
+    for name in (".env",):
         saved = backup / name
-        if saved.is_file() and not (ROOT / name).exists():
-            shutil.copy2(saved, ROOT / name)
+        if saved.is_file() and not (ROOT / name).exists(): shutil.copy2(saved, ROOT / name)
 
-    saved_cookie_dir = backup / "cookies"
-    if saved_cookie_dir.is_dir():
-        target_cookie_dir = ROOT / os.getenv("COOKIES_DIR", "cookies")
-        target_cookie_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(saved_cookie_dir, target_cookie_dir, dirs_exist_ok=True)
+    for legacy in (ROOT / "cookies.txt", ROOT / "cookies"):
+        try:
+            if legacy.is_dir(): shutil.rmtree(legacy)
+            elif legacy.exists(): legacy.unlink()
+        except OSError as exc:
+            print(f"⚠️ Could not remove legacy credential data {legacy}: {exc}")
 
     pip = ROOT / ".venv" / "bin" / "pip"
     if pip.exists():
