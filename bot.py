@@ -12,7 +12,6 @@ import socket
 import time
 import uuid
 from pathlib import Path
-from urllib.parse import urlparse
 
 import yt_dlp
 from dotenv import load_dotenv
@@ -30,8 +29,6 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
-COOKIES_FROM_BROWSER=os.getenv("COOKIES_FROM_BROWSER","").strip()
-COOKIES_FROM_BROWSER_PROFILE=os.getenv("COOKIES_FROM_BROWSER_PROFILE","").strip()
 YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","deno").strip()
 YTDLP_REMOTE_COMPONENTS=os.getenv("YTDLP_REMOTE_COMPONENTS","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
@@ -46,9 +43,6 @@ RATE_LIMIT_SECONDS=max(0,float(os.getenv("RATE_LIMIT_SECONDS","2")))
 PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
-COOKIES_FILE=os.getenv("COOKIES_FILE","").strip()
-COOKIES_DIR=Path(os.getenv("COOKIES_DIR","cookies"))
-PLATFORM_COOKIE_ENV={"youtube":"COOKIES_YOUTUBE","instagram":"COOKIES_INSTAGRAM","facebook":"COOKIES_FACEBOOK","tiktok":"COOKIES_TIKTOK","x":"COOKIES_X","reddit":"COOKIES_REDDIT","vimeo":"COOKIES_VIMEO","dailymotion":"COOKIES_DAILYMOTION","snapchat":"COOKIES_SNAPCHAT","pinterest":"COOKIES_PINTEREST","linkedin":"COOKIES_LINKEDIN","twitch":"COOKIES_TWITCH","threads":"COOKIES_THREADS","telegram":"COOKIES_TELEGRAM","generic":"COOKIES_GENERIC"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
@@ -180,11 +174,11 @@ def user_error_message(exc):
     """Return a safe, non-technical message for Telegram users.
 
     The complete exception is still logged by the caller. Authentication,
-    cookies, HTTP, extractor and network details are intentionally hidden
+    HTTP, extractor and network details are intentionally hidden
     from the user instead of exposing raw yt-dlp output.
     """
     s=" ".join(str(exc).replace("\n"," ").split()).lower()
-    if any(x in s for x in ("login", "sign in", "authentication", "cookies", "requires authentication", "you need to log in")):
+    if any(x in s for x in ("login", "sign in", "authentication", "requires authentication", "you need to log in")):
         return "⚠️ This link requires access/login and was skipped. The bot will not bypass authentication."
     if "403" in s or "forbidden" in s:
         return "⚠️ The source rejected this link, so it was skipped."
@@ -201,40 +195,6 @@ def user_error_message(exc):
     if "above the configured" in s or ("file is " in s and "mb" in s):
         return "⚠️ This file is larger than the bot's upload limit."
     return "⚠️ This link could not be downloaded."
-
-def cookie_platform(url):
-    host=urlparse(url).netloc.lower().split(":")[0]
-    if host.startswith("www."): host=host[4:]
-    groups={
-        "youtube":("youtube.com","youtu.be","youtube-nocookie.com"),
-        "instagram":("instagram.com","instagr.am"),
-        "facebook":("facebook.com","fb.watch"),
-        "tiktok":("tiktok.com","vm.tiktok.com","vt.tiktok.com"),
-        "x":("x.com","twitter.com","t.co"),
-        "reddit":("reddit.com","v.redd.it"),
-        "vimeo":("vimeo.com",),
-        "dailymotion":("dailymotion.com",),
-        "snapchat":("snapchat.com",),
-        "pinterest":("pinterest.com",),
-        "linkedin":("linkedin.com",),
-        "twitch":("twitch.tv",),
-        "threads":("threads.net",),
-        "telegram":("telegram.me","t.me"),
-    }
-    for platform, suffixes in groups.items():
-        if any(host==suffix or host.endswith("."+suffix) for suffix in suffixes):
-            return platform
-    return "generic"
-
-def cookie_file_for_url(url):
-    platform=cookie_platform(url)
-    configured=os.getenv(PLATFORM_COOKIE_ENV.get(platform,"COOKIES_GENERIC"),"").strip()
-    candidates=[]
-    if configured: candidates.append(Path(configured))
-    candidates.append(COOKIES_DIR / f"{platform}.txt")
-    if platform=="x": candidates.append(COOKIES_DIR / "twitter.txt")
-    if COOKIES_FILE: candidates.append(Path(COOKIES_FILE))
-    return next((p for p in candidates if p.is_file()),None)
 
 def size_text(n):
     if not n:return "unknown"
@@ -257,12 +217,6 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if hook:o["progress_hooks"]=[hook]
     if YTDLP_JS_RUNTIME:o["js_runtimes"]={YTDLP_JS_RUNTIME:{}}
     if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
-    cookie_file=cookie_file_for_url(url) if url else None
-    if cookie_file:
-        o["cookiefile"]=str(cookie_file)
-    elif COOKIES_FROM_BROWSER:
-        browser=COOKIES_FROM_BROWSER
-        o["cookiesfrombrowser"]=(browser,COOKIES_FROM_BROWSER_PROFILE or None)
     return o
 
 
@@ -444,8 +398,6 @@ async def inspect_formats(url):
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
         if YTDLP_JS_RUNTIME:o["js_runtimes"]={YTDLP_JS_RUNTIME:{}}
         if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
-        cookie_file=cookie_file_for_url(url)
-        if cookie_file:o["cookiefile"]=str(cookie_file)
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
     return await asyncio.to_thread(run)
 
