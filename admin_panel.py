@@ -2,15 +2,13 @@
 """Advanced Telegram-native admin control panel.
 
 The panel is intentionally Telegram-only: no public admin HTTP endpoint,
-and no secret/cookie values are ever displayed.
+and no credential or session data is ever accepted or displayed.
 """
 import html
-import os
 import platform
 import shutil
 import sys
 import time
-from pathlib import Path
 
 import bot
 
@@ -38,8 +36,8 @@ def _keyboard():
          bot.InlineKeyboardButton("🖥️ Servers", callback_data="ap|servers")],
         [bot.InlineKeyboardButton("⚙️ Jobs", callback_data="ap|jobs"),
          bot.InlineKeyboardButton("💾 Storage", callback_data="ap|storage")],
-        [bot.InlineKeyboardButton("🍪 Cookies", callback_data="ap|cookies"),
-         bot.InlineKeyboardButton("🩺 Health", callback_data="ap|health")],
+        [bot.InlineKeyboardButton("🩺 Health", callback_data="ap|health"),
+         bot.InlineKeyboardButton("🔐 Privacy", callback_data="ap|privacy")],
         [bot.InlineKeyboardButton("🔧 Runtime", callback_data="ap|runtime"),
          bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog")],
         [bot.InlineKeyboardButton("🧹 Cleanup", callback_data="ap|cleanup"),
@@ -49,20 +47,6 @@ def _keyboard():
 
 def _back():
     return bot.InlineKeyboardMarkup([[bot.InlineKeyboardButton("⬅️ Admin panel", callback_data="ap|home")]])
-
-def _cookie_report():
-    rows = []
-    for platform_name in sorted(bot.PLATFORM_COOKIE_ENV):
-        configured = os.getenv(bot.PLATFORM_COOKIE_ENV[platform_name], "").strip()
-        candidates = [Path(configured)] if configured else []
-        candidates.append(bot.COOKIES_DIR / f"{platform_name}.txt")
-        if platform_name == "x":
-            candidates.append(bot.COOKIES_DIR / "twitter.txt")
-        if bot.COOKIES_FILE:
-            candidates.append(Path(bot.COOKIES_FILE))
-        p = next((x for x in candidates if x.is_file()), None)
-        rows.append(f"✅ {platform_name}: {p.name} ({_size(p.stat().st_size)})" if p else f"⚪ {platform_name}: not configured")
-    return "\n".join(rows)
 
 def _overview():
     c = bot.db()
@@ -194,21 +178,21 @@ async def panel_callback(update, context):
         d = shutil.disk_usage(bot.DOWNLOAD_DIR)
         db_size = bot.DB_FILE.stat().st_size if bot.DB_FILE.exists() else 0
         files = sum(1 for p in bot.DOWNLOAD_DIR.iterdir() if p.is_file()) if bot.DOWNLOAD_DIR.exists() else 0
-        cookie_files = sum(1 for p in bot.COOKIES_DIR.glob("*.txt")) if bot.COOKIES_DIR.exists() else 0
         text = ("💾 <b>Storage</b>\n\n"
                 f"Download files: <b>{files}</b>\nDirectory: <code>{_esc(bot.DOWNLOAD_DIR)}</code>\n"
                 f"Database: <b>{_size(db_size)}</b> — <code>{_esc(bot.DB_FILE)}</code>\n"
-                f"Cookie files: <b>{cookie_files}</b> — <code>{_esc(bot.COOKIES_DIR)}</code>\n"
+
                 f"Free: <b>{_size(d.free)}</b>\nUsed: <b>{_size(d.used)}</b>\n"
                 f"App quota: <b>{'unlimited' if bot.STORAGE_QUOTA_GB == 0 else str(bot.STORAGE_QUOTA_GB) + ' GB'}</b>\n"
                 f"Retention: <b>{'kept' if bot.KEEP_MEDIA else 'delivery-only'}</b>\nBackend: <b>{_esc(bot.STORAGE_BACKEND)}</b>")
         return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
 
-    if action == "cookies":
-        text = ("🍪 <b>Authorized Cookie Status</b>\n\n" + _cookie_report() +
-                "\n\n🔐 Cookie contents are never displayed or uploaded." +
-                f"\n📁 Default folder: <code>{_esc(bot.COOKIES_DIR)}</code>")
-        return await q.edit_message_text(text[:3900], parse_mode="HTML", reply_markup=_back())
+    if action == "privacy":
+        text = ("🔐 <b>Privacy / Credential Policy</b>\n\n"
+                "Cookie and browser-session support has been removed.\n"
+                "No credential file, browser profile, session token, or imported login state is read by the downloader.\n\n"
+                "Authentication-required media is skipped rather than using stored sessions.")
+        return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
 
     if action == "health":
         c = bot.db()
@@ -224,7 +208,6 @@ async def panel_callback(update, context):
             ("SQLite", db_ok),
             ("FFmpeg", shutil.which("ffmpeg") is not None),
             ("Download directory", bot.DOWNLOAD_DIR.exists()),
-            ("Cookie directory", bot.COOKIES_DIR.exists()),
             ("BOT_TOKEN configured", bool(bot.BOT_TOKEN)),
             ("yt-dlp", bool(getattr(bot.yt_dlp, "version", None))),
         ]
