@@ -43,6 +43,7 @@ RATE_LIMIT_SECONDS=max(0,float(os.getenv("RATE_LIMIT_SECONDS","2")))
 PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
+YOUTUBE_HOSTS={"youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be","www.youtu.be","youtube-nocookie.com","www.youtube-nocookie.com"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
@@ -51,10 +52,20 @@ logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(m
 logger=logging.getLogger("telegram-video-downloader")
 GLOBAL_SEMAPHORE=asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS); JOBS={}; LAST_REQUEST={}; QUALITY_REQUESTS={}; LOCK=asyncio.Lock()
 URL_RE=re.compile(r"https?://[^\s<>\"]+|www\.[^\s<>\"]+",re.I)
+def is_youtube_url(url):
+    try:
+        from urllib.parse import urlparse
+        host=urlparse(url).netloc.lower().split("@")[-1].split(":")[0]
+        return host in YOUTUBE_HOSTS or host.endswith(".youtube.com")
+    except Exception:
+        return False
+
 def is_disabled_url(url):
-    return False
+    return is_youtube_url(url)
 
 def ensure_supported_url(url):
+    if is_youtube_url(url):
+        raise ValueError("YouTube links are disabled in this bot.")
     return None
 
 def extract_message_urls(message):
@@ -89,11 +100,39 @@ def db():
     c.execute("CREATE TABLE IF NOT EXISTS favorites(user_id INTEGER,url TEXT,title TEXT,created_at INTEGER,PRIMARY KEY(user_id,url))")
     c.execute("CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,username TEXT DEFAULT '',event TEXT,url TEXT DEFAULT '',details TEXT DEFAULT '',server_id TEXT DEFAULT '',created_at INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS servers(server_id TEXT PRIMARY KEY,kind TEXT,label TEXT,hostname TEXT,pid INTEGER,started_at INTEGER,last_seen INTEGER,status TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY,added_by INTEGER DEFAULT 0,created_at INTEGER)")
+    for admin_id in sorted(ADMIN_USER_IDS):
+        c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(admin_id,0,int(time.time())))
+    rows=c.execute("SELECT user_id FROM admins").fetchall()
+    ADMIN_USER_IDS.clear(); ADMIN_USER_IDS.update(int(row[0]) for row in rows)
     for column, definition in (("username","TEXT DEFAULT ''"),("first_name","TEXT DEFAULT ''"),("last_name","TEXT DEFAULT ''")):
         try: c.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
         except sqlite3.OperationalError: pass
     c.commit(); return c
 
+
+def is_admin(uid):
+    return int(uid or 0) in ADMIN_USER_IDS
+
+def admin_list():
+    c=db(); rows=c.execute("SELECT user_id,added_by,created_at FROM admins ORDER BY user_id").fetchall(); c.close(); return rows
+
+def add_admin(uid, added_by):
+    uid=int(uid); c=db()
+    c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(uid,int(added_by),int(time.time())))
+    changed=c.total_changes; c.commit(); c.close(); ADMIN_USER_IDS.add(uid)
+    return bool(changed)
+
+def remove_admin(uid):
+    uid=int(uid); c=db()
+    count=c.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+    if count <= 1:
+        c.close(); return False, "At least one admin must remain."
+    changed=c.execute("DELETE FROM admins WHERE user_id=?",(uid,)).rowcount
+    c.commit(); c.close()
+    if changed:
+        ADMIN_USER_IDS.discard(uid); return True, "Admin removed."
+    return False, "That user is not an admin."
 
 def touch(uid,user=None):
     c=db(); now=int(time.time())
@@ -186,6 +225,8 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
+    if "youtube links are disabled" in s:
+        return "⚠️ YouTube links are disabled in this bot."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "ffmpeg" in s:
@@ -294,7 +335,7 @@ async def favorites_cmd(update,context):
 
 async def admin_cmd(update,context):
     uid=update.effective_user.id
-    if uid not in ADMIN_USER_IDS:return await update.effective_message.reply_text("❌ Admin only.")
+    if not is_admin(uid):return await update.effective_message.reply_text("❌ Admin only.")
     c=db();users=c.execute("SELECT COUNT(*) FROM users").fetchone()[0];success=c.execute("SELECT COUNT(*) FROM history WHERE status='success'").fetchone()[0];failed=c.execute("SELECT COUNT(*) FROM history WHERE status='failed'").fetchone()[0];c.close();d=shutil.disk_usage(DOWNLOAD_DIR)
     await update.effective_message.reply_text(f"🛡️ Admin dashboard\n👥 Users: {users}\n✅ Downloads: {success}\n❌ Failed: {failed}\n💾 Free disk: {size_text(d.free)}\n🎞️ FFmpeg: {'OK' if shutil.which('ffmpeg') else 'MISSING'}\n📦 yt-dlp: {yt_dlp.version.__version__}")
 
