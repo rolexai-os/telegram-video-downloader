@@ -11,8 +11,8 @@ The Telegram-native admin panel has been restored and expanded. Admins listed in
 - 📝 Audit logs: recent user/action/server activity without exposing secrets.
 - 🖥️ Servers: local/Render heartbeat and process visibility.
 - ⚙️ Jobs: active jobs, global concurrency and paused-user count.
-- 💾 Storage: download/database/cookie locations, file counts, disk usage, quota and retention mode.
-- 🍪 Cookies: safe presence/size checks for authorized cookie jars; values are never displayed.
+- 💾 Storage: download/database locations, file counts, disk usage, quota and retention mode.
+- 🔐 Privacy: credential-free downloader status; session sessions are not supported.
 - 🩺 Health: SQLite, FFmpeg, directories, token configuration and yt-dlp checks.
 - 🔧 Runtime: safe non-secret Python, platform, release and downloader configuration.
 - 📄 System log: recent application log output.
@@ -60,6 +60,15 @@ Telegram's standard Bot API currently limits newly uploaded videos/files to 50 M
 
 Render Free uses an ephemeral filesystem, so it is not an unlimited permanent file store. For durable archives use supported persistent storage or a paid persistent disk.
 
+## v1.15.0 privacy + credential-free update
+
+- Removed all cookie-file support, browser-cookie extraction, and session-cookie configuration.
+- Removed credential handling from the downloader, runner, admin panel, Render configuration, updater, and example environment.
+- Existing installations automatically delete legacy `cookies/` and `cookies.txt` data during update.
+- Authentication-required media is skipped instead of using stored sessions.
+- Removed tracked cookie files from the repository.
+- Added an admin-panel Privacy view showing the credential-free policy.
+
 ## v1.8.0 audit + server monitoring
 
 - `/admin` now opens the protected inline admin control panel.
@@ -69,7 +78,7 @@ Render Free uses an ephemeral filesystem, so it is not an unlimited permanent fi
 - Render instances identify themselves from Render environment metadata; local Termux/Linux instances identify by hostname.
 - The database is created locally as `bot.db` by default, with the same schema on Render.
 - Real URL logging can be disabled with `LOG_URLS=0`.
-- Cookies, bot tokens and other secrets are never included in audit records.
+- Bot tokens and other secrets are never included in audit records.
 - **Important:** separate Render and local SQLite databases are separate datasets. The panel can show multiple servers only when they share the same database (for example, a future PostgreSQL deployment). Running the same bot token on two servers is still prohibited by Telegram's polling rules.
 
 
@@ -117,15 +126,6 @@ A self-hosted Telegram media downloader built with Python, python-telegram-bot, 
 
 ## v1.5.0 feature update
 
-### Per-platform authorized cookies
-- Separate cookie jars for Facebook, TikTok, X/Twitter, Reddit, Vimeo, Dailymotion, Snapchat, Pinterest, LinkedIn, Twitch, Threads and Telegram.
-- Automatic platform detection selects only the matching cookie jar.
-- Custom COOKIES_<PLATFORM> environment variables can override cookies/<platform>.txt.
-- Legacy COOKIES_FILE remains available as a fallback.
-- Authenticated stories/restricted media can work when yt-dlp supports the extractor and the operator provides valid, authorized cookies.
-- Cookie files stay local and are excluded from Git.
-- Authentication/access controls are not bypassed.
-
 ## v1.4.1 feature update
 
 This patch keeps raw yt-dlp/HTTP/authentication errors out of Telegram user messages. Full technical exceptions remain in server logs for debugging. Links that require authentication are reported as skipped; the bot does not bypass authentication.
@@ -163,7 +163,6 @@ This release connects the roadmap features that can safely run in the existing s
 - Recent-user visibility
 - Disk, FFmpeg and yt-dlp status
 - Version command
-- Authorized-cookie support
 - Existing legal-use and beta restrictions remain enabled
 
 ### Reliability
@@ -174,11 +173,11 @@ This release connects the roadmap features that can safely run in the existing s
 - Render-compatible webhook runner
 - GitHub Actions validation
 - Existing-user update scripts
-- Environment and cookie preservation during updates
+- Environment preservation and automatic legacy credential cleanup during updates
 
 ## YouTube and Instagram support
 
-YouTube videos/Shorts and Instagram posts/Reels are supported again in v1.13.0 through yt-dlp. Authorized cookies can be supplied per platform when needed. The bot does not bypass authentication, DRM, private-content restrictions, or access controls.
+YouTube videos/Shorts and Instagram posts/Reels are supported through yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials. Authentication-required media is skipped.
 
 ## Commands
 
@@ -240,10 +239,6 @@ LOG_URLS=1
 SERVER_HEARTBEAT_INTERVAL=30
 # Optional: SERVER_NAME=My Termux phone
 
-COOKIES_DIR=cookies
-# Optional local authorized browser session:
-# COOKIES_FROM_BROWSER=firefox
-# COOKIES_FROM_BROWSER_PROFILE=/path/to/profile
 
 YTDLP_MAX_ATTEMPTS=3
 YTDLP_RETRY_DELAY=2
@@ -291,21 +286,6 @@ nano .env
 python runner.py
 ~~~
 
-## Cookie files: where to place them
-
-The tracked `cookies/README.md` contains the full folder layout. In a normal checkout, put authorized cookie jars here:
-
-~~~text
-cookies/youtube.txt
-cookies/instagram.txt
-cookies/facebook.txt
-cookies/tiktok.txt
-cookies/x.txt
-cookies/reddit.txt
-~~~
-
-Continue the same naming pattern for the other supported platforms. The bot automatically selects the matching file. Real cookie files are ignored by Git and must never be committed or sent through Telegram. For a custom location, set `COOKIES_<PLATFORM>` in `.env`.
-
 ## Existing-user update
 
 ~~~bash
@@ -315,23 +295,11 @@ bash update.sh
 python update.py
 ~~~
 
-The updater preserves .env and the entire local authorized cookies/ directory, installs current dependencies, and updates the checked-out release. **Restart the bot after updating.**
+The updater preserves `.env`, installs current dependencies, removes legacy `cookies/` and `cookies.txt` credential data, and updates the checked-out release. **Restart the bot after updating.**
 
 For existing users, do not replace your .env with .env.example; copy new variables manually when required.
 
 ## Render
-
-For cookies on the Docker-based Render deployment, use Render **Secret Files**, not GitHub. Render makes service secret files available at runtime under `/etc/secrets/<filename>`.
-
-Recommended setup:
-
-1. Open the Render service → **Environment** → **Secret Files** → **Add Secret File**.
-2. Upload/paste only authorized cookie jars for supported platforms, such as `facebook.txt`, `tiktok.txt`, and `x.txt`.
-3. The included `render.yaml` maps the supported platform cookie files to Render Secret Files.
-4. Save/deploy. The bot will detect the matching cookie file automatically.
-5. Check **/panel → 🍪 Cookies** to see presence and file size only; cookie values are never shown.
-
-Render documents a 1 MB combined limit for secret files on a service/environment group, so keep only the cookie jars you actually need.
 
 Connect the main branch to Render and add BOT_TOKEN as a secret environment variable. Auto-deploy can deploy new commits from main.
 
@@ -382,4 +350,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.13.0**
+**Testing / Beta — v1.15.0**
