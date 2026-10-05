@@ -16,13 +16,11 @@ MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
 RETRY_DELAY = max(0.5, float(os.getenv("YTDLP_RETRY_DELAY", "2")))
 FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on"}
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
-COOKIES_FROM_BROWSER = os.getenv("COOKIES_FROM_BROWSER", "").strip()
-COOKIES_FROM_BROWSER_PROFILE = os.getenv("COOKIES_FROM_BROWSER_PROFILE", "").strip()
 YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.13.0"
+FEATURE_VERSION = "1.15.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -191,7 +189,7 @@ def error_text(exc):
 def classify_error(exc):
     s = error_text(exc).lower()
     rules = [
-        (("403","forbidden"), "HTTP 403: the source rejected the media request; authorized cookies may be required."),
+        (("403","forbidden"), "HTTP 403: the source rejected the media request."),
         (("429","rate limit"), "HTTP 429: the source rate-limited this request; wait and retry."),
         (("401","unauthorized"), "HTTP 401: authentication may be required."),
         (("404","not found"), "HTTP 404: media was not found or is no longer available."),
@@ -200,7 +198,7 @@ def classify_error(exc):
         (("ssl","tls","certificate"), "TLS/SSL connection failed."),
         (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg is installed."),
         (("unsupported url",), "This URL is not supported by yt-dlp."),
-        (("login","sign in","authentication"), "The source requires authentication; use only authorized cookies."),
+        (("login","sign in","authentication"), "The source requires authentication; this bot does not provide session-cookie access."),
     ]
     for needles, message in rules:
         if any(x in s for x in needles):
@@ -228,11 +226,6 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
         o["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
     if YTDLP_REMOTE_COMPONENTS:
         o["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
-    cookie_file = bot.cookie_file_for_url(url)
-    if cookie_file:
-        o["cookiefile"] = str(cookie_file)
-    elif COOKIES_FROM_BROWSER:
-        o["cookiesfrombrowser"] = (COOKIES_FROM_BROWSER, COOKIES_FROM_BROWSER_PROFILE or None)
     if FORCE_IPV4 or attempt >= 2: o["source_address"] = "0.0.0.0"
     ua = USER_AGENT or (DEFAULT_UA if attempt >= 2 else "")
     if ua: o["http_headers"] = {"User-Agent": ua}
@@ -287,11 +280,6 @@ async def analyze_cmd(update, context):
                 opts["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
             if YTDLP_REMOTE_COMPONENTS:
                 opts["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
-            cookie_file = bot.cookie_file_for_url(url)
-            if cookie_file:
-                opts["cookiefile"] = str(cookie_file)
-            elif COOKIES_FROM_BROWSER:
-                opts["cookiesfrombrowser"] = (COOKIES_FROM_BROWSER, COOKIES_FROM_BROWSER_PROFILE or None)
             with yt_dlp.YoutubeDL(opts) as y: return y.extract_info(url, download=False)
         info = await asyncio.to_thread(inspect)
         formats = info.get("formats", []) if info else []
