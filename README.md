@@ -37,7 +37,7 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 
 - The Docker image now installs `unzip` before running the official Deno installer.
 - This fixes Render/Docker builds that failed with `either unzip or 7z is required to install Deno`.
-- No runtime downloader behavior or cookie handling was changed by this patch.
+- No runtime downloader behavior was changed by this patch.
 
 ## v1.9.0 reliability, long-video delivery and command menu
 
@@ -49,11 +49,10 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 - Large media has no application-side duration/size cap by default. Files above the configured Telegram upload chunk size are automatically split with FFmpeg and delivered in parts.
 - `STORAGE_QUOTA_GB=0` means no application quota; physical disk/object-storage capacity still applies.
 - `KEEP_MEDIA=1` enables local archive retention. On Render Free, local files remain ephemeral and are lost on restart/redeploy/spin-down.
-- A non-authentic cookie syntax example is included under `cookies/examples/dummy.txt`.
 
 ### Important platform limits
 
-yt-dlp supports many extractors, but no downloader can guarantee every social URL indefinitely because platforms change their APIs, authentication and anti-bot behavior. Authentication-required stories/posts need an authorized session cookie.
+yt-dlp supports many extractors, but no downloader can guarantee every social URL indefinitely because platforms change their APIs, authentication and anti-bot behavior. Authentication-required media is skipped.
 
 Telegram's standard Bot API currently limits newly uploaded videos/files to 50 MB. The bot therefore splits larger media into parts automatically. A self-hosted Local Bot API Server can raise uploads to 2000 MB.
 
@@ -100,7 +99,7 @@ Render Free uses an ephemeral filesystem, so it is not an unlimited permanent fi
 - A background Telegram watchdog periodically checks Bot API reachability and records the result in logs.
 - A global PTB error handler replaces the previous `No error handlers are registered` warning with structured network/error logging.
 - The Render web process supervises `runner.py` and restarts it after an unexpected exit.
-- Existing cookies, downloads, database, admin panel, commands and updater behavior remain compatible.
+- Downloads, database, admin panel, commands and updater behavior remain compatible.
 
 > **Important:** These changes improve resilience to transient network failures and unexpected runner exits. They cannot guarantee 24/7 uptime if a free hosting provider suspends or restarts the service.
 
@@ -116,8 +115,8 @@ A self-hosted Telegram media downloader built with Python, python-telegram-bot, 
 - Overview: users, history, success/failure totals, free disk, FFmpeg and yt-dlp.
 - Users: recent Telegram user IDs and last-seen timestamps.
 - Jobs: active jobs, per-user queue visibility and global concurrency.
-- Storage: download/database/cookie paths, file counts and disk usage.
-- Cookies: per-platform cookie-file presence and size without exposing cookie values.
+- Storage: download/database paths, file counts and disk usage.
+- Privacy: credential-free runtime; no session import support.
 - Cleanup: one-tap removal of stale download files older than 1 hour.
 - Broadcast help: guided `/announce` access.
 - System: release, Python, PID, paths, limits and runtime information.
@@ -256,7 +255,7 @@ TG_WATCHDOG_INTERVAL=60
 RUNNER_RESTART_DELAY=5
 ~~~
 
-Never commit the real .env, cookies, bot token, API keys, or session secrets.
+Never commit the real .env, bot token, API keys, or session secrets.
 
 ## Installation
 
