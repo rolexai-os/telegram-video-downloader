@@ -38,6 +38,8 @@ def _keyboard():
          bot.InlineKeyboardButton("💾 Storage", callback_data="ap|storage")],
         [bot.InlineKeyboardButton("🩺 Health", callback_data="ap|health"),
          bot.InlineKeyboardButton("🔐 Privacy", callback_data="ap|privacy")],
+        [bot.InlineKeyboardButton("👑 Admins", callback_data="ap|admins"),
+         bot.InlineKeyboardButton("➕ Add admin", callback_data="ap|adminhelp")],
         [bot.InlineKeyboardButton("🔧 Runtime", callback_data="ap|runtime"),
          bot.InlineKeyboardButton("📄 System log", callback_data="ap|systemlog")],
         [bot.InlineKeyboardButton("🧹 Cleanup", callback_data="ap|cleanup"),
@@ -99,7 +101,7 @@ async def panel_callback(update, context):
         rows = c.execute("SELECT status, COUNT(*) FROM history GROUP BY status").fetchall()
         platform_rows = c.execute(
             "SELECT CASE WHEN instr(url,'instagram.com')>0 THEN 'Instagram' "
-            "WHEN instr(url,'youtube.com')>0 OR instr(url,'youtu.be')>0 THEN 'YouTube' "
+            ""
             "WHEN instr(url,'tiktok.com')>0 THEN 'TikTok' "
             "WHEN instr(url,'x.com')>0 OR instr(url,'twitter.com')>0 THEN 'X/Twitter' "
             "WHEN instr(url,'facebook.com')>0 OR instr(url,'fb.watch')>0 THEN 'Facebook' "
@@ -186,6 +188,24 @@ async def panel_callback(update, context):
                 f"App quota: <b>{'unlimited' if bot.STORAGE_QUOTA_GB == 0 else str(bot.STORAGE_QUOTA_GB) + ' GB'}</b>\n"
                 f"Retention: <b>{'kept' if bot.KEEP_MEDIA else 'delivery-only'}</b>\nBackend: <b>{_esc(bot.STORAGE_BACKEND)}</b>")
         return await q.edit_message_text(text, parse_mode="HTML", reply_markup=_back())
+
+    if action == "admins":
+        rows=bot.admin_list()
+        lines=[f"👑 <b>Administrators: {len(rows)}</b>",""]
+        lines += [f"• <code>{uid}</code>" for uid,_,_ in rows]
+        lines.append("")
+        lines.append("Use /adminadd <Telegram ID> or /adminremove <Telegram ID>.")
+        return await q.edit_message_text("\n".join(lines),parse_mode="HTML",reply_markup=_back())
+
+    if action == "adminhelp":
+        return await q.edit_message_text(
+            "👑 <b>Admin Manager</b>\n\n"
+            "There is no fixed admin limit. Administrators are stored persistently in SQLite.\n\n"
+            "➕ Add: <code>/adminadd 123456789</code>\n"
+            "➖ Remove: <code>/adminremove 123456789</code>\n"
+            "📋 List: <code>/admins</code>\n\n"
+            "The last administrator cannot be removed.",
+            parse_mode="HTML",reply_markup=_back())
 
     if action == "privacy":
         text = ("🔐 <b>Privacy / Credential Policy</b>\n\n"
