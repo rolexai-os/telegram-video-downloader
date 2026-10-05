@@ -173,9 +173,9 @@ This release connects the roadmap features that can safely run in the existing s
 - Existing-user update scripts
 - Environment preservation and automatic legacy credential cleanup during updates
 
-## YouTube and Instagram support
+## Supported platforms
 
-YouTube videos/Shorts and Instagram posts/Reels are supported through yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials. Authentication-required media is skipped.
+YouTube and YouTube Shorts links are intentionally disabled and are rejected before yt-dlp runs. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
 
 ## Commands
 
@@ -202,7 +202,7 @@ YouTube videos/Shorts and Instagram posts/Reels are supported through yt-dlp. Th
 | /admin | Protected full inline admin panel |
 | /panel | Same protected inline admin panel |
 
-Admin-only commands include `/panel`, `/cleanup` and `/announce <message>`. Set `ADMIN_USER_IDS` first. The panel is Telegram-native and restricted by numeric Telegram user ID.
+Admin-only commands include `/panel`, `/cleanup`, `/announce <message>`, `/admins`, `/adminadd <Telegram ID>` and `/adminremove <Telegram ID>`. The bootstrap IDs in `ADMIN_USER_IDS` are persisted to SQLite. There is no fixed administrator count limit. Any administrator can add another Telegram user ID or remove another administrator; the final administrator cannot be removed.
 
 ## Configuration
 
@@ -348,4 +348,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.15.0**
+**Testing / Beta — v1.16.0**
