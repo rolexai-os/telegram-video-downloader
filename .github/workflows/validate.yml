@@ -34,7 +34,6 @@ jobs:
               entities = ()
               caption_entities = ()
           assert bot.extract_message_urls(FakeMessage()) == ["https://x.com/example/status/1", "https://www.tiktok.com/@example/video/1"]
-          assert bot.cookie_platform("https://x.com/example/status/1") == "x"
           assert callable(bot.user_error_message)
           assert "will not bypass authentication" in bot.user_error_message("You need to log in to access this content")
           assert "profile" in inspect.signature(runner.robust_sync_download).parameters
@@ -84,7 +83,7 @@ jobs:
           grep -q 'audit_update' runner.py
           grep -q 'systemlog' admin_panel.py
           grep -q 'privacy' admin_panel.py
-          ! grep -RniE 'COOKIES_|cookie_file_for_url|cookiesfrombrowser' --exclude-dir=.git .
+          ! grep -RniE 'COOKIES_|cookie_file_for_url|cookiesfrombrowser|cookie_platform' bot.py runner.py admin_panel.py
           grep -q 'analytics' admin_panel.py
           grep -q 'health' admin_panel.py
           grep -q 'runtime' admin_panel.py
