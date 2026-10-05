@@ -28,11 +28,8 @@ fi
 BACKUP_DIR=".update-backup-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
-# Keep local secrets and user-specific files out of Git operations.
+# Keep the local environment file out of Git operations.
 [ -f .env ] && cp .env "$BACKUP_DIR/.env"
-[ -f cookies.txt ] && cp cookies.txt "$BACKUP_DIR/cookies.txt"
-COOKIE_DIR="${COOKIES_DIR:-cookies}"
-[ -d "$COOKIE_DIR" ] && cp -a "$COOKIE_DIR" "$BACKUP_DIR/cookies"
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "⚠️ Local source changes detected. Creating a safety stash..."
@@ -48,7 +45,9 @@ elif [ -f "$BACKUP_DIR/.env" ]; then
   cp "$BACKUP_DIR/.env" .env
 fi
 
-if [ -d "$BACKUP_DIR/cookies" ]; then mkdir -p "$COOKIE_DIR"; cp -a "$BACKUP_DIR/cookies/." "$COOKIE_DIR/"; fi
+# Remove legacy credential/session data because cookie support is no longer available.
+rm -rf cookies
+rm -f cookies.txt
 
 PYTHON="python3"
 [ -x .venv/bin/python ] && PYTHON=".venv/bin/python"
@@ -62,4 +61,5 @@ fi
 echo ""
 echo "✅ Update completed successfully."
 echo "Version: $(git rev-parse --short HEAD)"
+echo "Legacy cookie/session data removed."
 echo "Restart the bot/application to load the new version."
