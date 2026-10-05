@@ -1,6 +1,4 @@
 .env
-cookies.txt
-*.cookies.txt
 __pycache__/
 *.py[cod]
 .venv/
@@ -8,8 +6,4 @@ venv/
 downloads/
 *.log
 .DS_Store
-
-# Keep the cookie-folder guide, never commit real cookie jars.
-cookies/*
-!cookies/README.md
 .update-backup-*/
