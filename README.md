@@ -49,7 +49,6 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 - Large media has no application-side duration/size cap by default. Files above the configured Telegram upload chunk size are automatically split with FFmpeg and delivered in parts.
 - `STORAGE_QUOTA_GB=0` means no application quota; physical disk/object-storage capacity still applies.
 - `KEEP_MEDIA=1` enables local archive retention. On Render Free, local files remain ephemeral and are lost on restart/redeploy/spin-down.
-- Authorized browser-cookie loading is supported locally with `COOKIES_FROM_BROWSER` for supported platforms.
 - A non-authentic cookie syntax example is included under `cookies/examples/dummy.txt`.
 
 ### Important platform limits
