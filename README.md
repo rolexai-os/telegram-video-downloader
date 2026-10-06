@@ -175,7 +175,7 @@ This release connects the roadmap features that can safely run in the existing s
 
 ## Supported platforms
 
-YouTube and YouTube Shorts links are intentionally disabled and are rejected before yt-dlp runs. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
+YouTube and YouTube Shorts links are supported normally through yt-dlp. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
 
 ## Commands
 
@@ -202,7 +202,7 @@ YouTube and YouTube Shorts links are intentionally disabled and are rejected bef
 | /admin | Protected full inline admin panel |
 | /panel | Same protected inline admin panel |
 
-Admin-only commands include `/panel`, `/cleanup`, `/announce <message>`, `/admins`, `/adminadd <Telegram ID>` and `/adminremove <Telegram ID>`. The bootstrap IDs in `ADMIN_USER_IDS` are persisted to SQLite. There is no fixed administrator count limit. Any administrator can add another Telegram user ID or remove another administrator; the final administrator cannot be removed.
+Admin-only commands include `/panel`, `/cleanup`, `/announce <message>`, `/admins`, `/adminadd <Telegram ID>` and `/adminremove <Telegram ID>`. `BOT_OWNER_ID` identifies the bot owner and is always retained as an administrator. The bootstrap IDs in `ADMIN_USER_IDS` are persisted to SQLite. There is no fixed administrator count limit. **Only the bot owner can add or remove administrators. Added administrators cannot create, remove, or promote other administrators.**
 
 ## Configuration
 
@@ -231,6 +231,7 @@ PROGRESS_UPDATE_SECONDS=3
 DEFAULT_AUDIO_QUALITY=192
 
 # Optional
+BOT_OWNER_ID=123456789
 ADMIN_USER_IDS=123456789
 
 LOG_URLS=1
