@@ -42,6 +42,7 @@ MAX_QUEUE_PER_USER=max(0,int(os.getenv("MAX_QUEUE_PER_USER","0")))
 RATE_LIMIT_SECONDS=max(0,float(os.getenv("RATE_LIMIT_SECONDS","2")))
 PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
+BOT_OWNER_ID=int(os.getenv("BOT_OWNER_ID","0").strip() or "0")
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
 YOUTUBE_HOSTS={"youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be","www.youtu.be","youtube-nocookie.com","www.youtube-nocookie.com"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
@@ -61,11 +62,9 @@ def is_youtube_url(url):
         return False
 
 def is_disabled_url(url):
-    return is_youtube_url(url)
+    return False
 
 def ensure_supported_url(url):
-    if is_youtube_url(url):
-        raise ValueError("YouTube links are disabled in this bot.")
     return None
 
 def extract_message_urls(message):
@@ -85,7 +84,7 @@ def extract_message_urls(message):
     for url in urls:
         if not url: continue
         if url.startswith("www."): url="https://"+url
-        if url.startswith(("http://","https://")) and url not in seen and not is_disabled_url(url):
+        if url.startswith(("http://","https://")) and url not in seen:
             seen.add(url); result.append(url)
     return result
 
@@ -107,14 +106,28 @@ def db():
             c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(admin_id,0,int(time.time())))
     rows=c.execute("SELECT user_id FROM admins").fetchall()
     ADMIN_USER_IDS.clear(); ADMIN_USER_IDS.update(int(row[0]) for row in rows)
+    if BOT_OWNER_ID > 0:
+        c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(BOT_OWNER_ID,0,int(time.time())))
+        c.commit(); ADMIN_USER_IDS.add(BOT_OWNER_ID)
     for column, definition in (("username","TEXT DEFAULT ''"),("first_name","TEXT DEFAULT ''"),("last_name","TEXT DEFAULT ''")):
         try: c.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
         except sqlite3.OperationalError: pass
     c.commit(); return c
 
 
+def is_owner(uid):
+    return BOT_OWNER_ID > 0 and int(uid or 0) == BOT_OWNER_ID
+
 def is_admin(uid):
     return int(uid or 0) in ADMIN_USER_IDS
+
+def ensure_owner_is_admin():
+    if BOT_OWNER_ID <= 0:
+        return
+    c=db()
+    c.execute("INSERT OR IGNORE INTO admins(user_id,added_by,created_at) VALUES(?,?,?)",(BOT_OWNER_ID,0,int(time.time())))
+    c.commit(); c.close()
+    ADMIN_USER_IDS.add(BOT_OWNER_ID)
 
 def admin_list():
     c=db(); rows=c.execute("SELECT user_id,added_by,created_at FROM admins ORDER BY user_id").fetchall(); c.close(); return rows
@@ -128,6 +141,8 @@ def add_admin(uid, added_by):
 def remove_admin(uid):
     uid=int(uid); c=db()
     count=c.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+    if uid == BOT_OWNER_ID:
+        c.close(); return False, "The bot owner cannot be removed."
     if count <= 1:
         c.close(); return False, "At least one admin must remain."
     changed=c.execute("DELETE FROM admins WHERE user_id=?",(uid,)).rowcount
@@ -227,8 +242,6 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
-    if "youtube links are disabled" in s:
-        return "⚠️ YouTube links are disabled in this bot."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "ffmpeg" in s:
