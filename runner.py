@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Production runner with robust yt-dlp handling and roadmap feature extensions."""
-import asyncio, logging, os, random, time
+import asyncio, logging, os, random, shutil, time
 import httpx
 from pathlib import Path
 import yt_dlp
@@ -17,7 +17,7 @@ MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
 RETRY_DELAY = max(0.5, float(os.getenv("YTDLP_RETRY_DELAY", "2")))
 FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on"}
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
-YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
+YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "auto").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
@@ -190,6 +190,62 @@ async def telegram_error_handler(update, context):
 def error_text(exc):
     return " ".join(str(exc).replace("\n"," ").split())[:1000]
 
+
+def resolve_js_runtime():
+    """Resolve a usable yt-dlp EJS runtime from configuration or PATH."""
+    value = YTDLP_JS_RUNTIME.strip()
+    if value.lower() in {"", "off", "none", "disabled"}:
+        return None
+    if value.lower() == "auto":
+        candidates = (("deno", "deno"), ("node", "node"), ("quickjs", "qjs"))
+        for runtime, executable in candidates:
+            path = shutil.which(executable)
+            if path:
+                return {runtime: {"path": path}}
+        return None
+    if ":" in value:
+        runtime, path = value.split(":", 1)
+        runtime = runtime.strip().lower()
+        path = path.strip()
+        if runtime not in {"deno", "node", "quickjs", "bun"}:
+            raise RuntimeError(f"Unsupported JavaScript runtime: {runtime}")
+        if not path:
+            raise RuntimeError(f"JavaScript runtime path is empty for {runtime}")
+        executable = path if os.path.isfile(path) else shutil.which(path)
+        if not executable:
+            raise RuntimeError(f"Configured JavaScript runtime was not found: {path}")
+        return {runtime: {"path": executable}}
+    runtime = value.lower()
+    executable = "qjs" if runtime == "quickjs" else runtime
+    if runtime not in {"deno", "node", "quickjs", "bun"}:
+        raise RuntimeError(f"Unsupported JavaScript runtime: {runtime}")
+    path = shutil.which(executable)
+    if not path:
+        raise RuntimeError(
+            f"Configured JavaScript runtime '{runtime}' is not installed or not in PATH."
+        )
+    return {runtime: {"path": path}}
+
+
+def requires_youtube_js(url):
+    value = str(url).lower()
+    return (
+        "youtube.com/" in value
+        or "youtu.be/" in value
+        or value.startswith("ytsearch")
+    )
+
+
+def youtube_runtime_preflight(url):
+    spec = resolve_js_runtime()
+    if requires_youtube_js(url) and not spec:
+        raise RuntimeError(
+            "YouTube requires a JavaScript runtime for current yt-dlp. "
+            "Install Deno (recommended) or Node.js 22+ and restart the bot."
+        )
+    return spec
+
+
 def classify_error(exc):
     s = error_text(exc).lower()
     rules = [
@@ -200,6 +256,7 @@ def classify_error(exc):
         (("timeout","timed out"), "Network timeout while contacting the source."),
         (("name or service not known","temporary failure in name resolution"), "DNS/network resolution failed."),
         (("ssl","tls","certificate"), "TLS/SSL connection failed."),
+        (("javascript runtime","js runtime","ejs"), "YouTube needs a supported JavaScript runtime such as Deno or Node.js 22+."),
         (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg is installed."),
         (("unsupported url",), "This URL is not supported by yt-dlp."),
         (("login","sign in","authentication"), "The source requires authentication; this bot does not provide session-cookie access."),
@@ -209,7 +266,7 @@ def classify_error(exc):
             return message
     return "Download failed. Check the URL and bot logs."
 
-def download_options(template, audio, hook, attempt, profile="best", captions=False, url=""):
+def download_options(template, audio, hook, attempt, profile="best", captions=False, url="", runtime_spec=None):
     o = {
         "format": "bestaudio/best" if audio else bot.format_for_quality(profile),
         "outtmpl": template, "merge_output_format": "mp4", "noplaylist": True,
@@ -226,8 +283,8 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
         o.update(writesubtitles=True, writeautomaticsub=True,
                  subtitleslangs=["all"], subtitlesformat="srt/vtt/best")
     if hook: o["progress_hooks"] = [hook]
-    if YTDLP_JS_RUNTIME:
-        o["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
+    if runtime_spec:
+        o["js_runtimes"] = runtime_spec
     if YTDLP_REMOTE_COMPONENTS:
         o["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     if FORCE_IPV4 or attempt >= 2: o["source_address"] = "0.0.0.0"
@@ -247,9 +304,12 @@ def robust_sync_download(url, audio_only=False, progress_hook=None, profile="bes
     suffix = "mp3" if audio_only else "%(ext)s"
     template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
     last = None
+    runtime_spec = youtube_runtime_preflight(url)
+    if runtime_spec:
+        log.info("yt-dlp JavaScript runtime: %s", next(iter(runtime_spec)))
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            with yt_dlp.YoutubeDL(download_options(template, audio_only, progress_hook, attempt, profile, captions, url)) as ydl:
+            with yt_dlp.YoutubeDL(download_options(template, audio_only, progress_hook, attempt, profile, captions, url, runtime_spec)) as ydl:
                 info = ydl.extract_info(url, download=True)
                 if info and info.get("entries"):
                     info = next((x for x in info["entries"] if x), None)
@@ -287,8 +347,9 @@ async def analyze_cmd(update, context):
         def inspect():
             opts = {"quiet": True, "no_warnings": True, "skip_download": True,
                     "noplaylist": True, "socket_timeout": 20}
-            if YTDLP_JS_RUNTIME:
-                opts["js_runtimes"] = {YTDLP_JS_RUNTIME: {}}
+            runtime_spec = youtube_runtime_preflight(url)
+            if runtime_spec:
+                opts["js_runtimes"] = runtime_spec
             if YTDLP_REMOTE_COMPONENTS:
                 opts["remote_components"] = [x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
             with yt_dlp.YoutubeDL(opts) as y: return y.extract_info(url, download=False)
