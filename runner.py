@@ -479,34 +479,4 @@ def main():
             raise SystemExit(CONFLICT_EXIT_CODE)
 
 if __name__ == "__main__":
-    main()async def playlist_cmd(update,context):
-    urls=[bot.clean_url(x) for x in bot.URL_RE.findall(" ".join(context.args))]
-    if not urls:return await update.effective_message.reply_text("Usage: /playlist <URL>")
-    uid=update.effective_user.id;url=urls[0]
-    if spotify.is_spotify_url(url):
-        try:
-            name,tracks=await asyncio.to_thread(spotify.collection,url)
-            tracks=tracks[:bot.PLAYLIST_MAX_ITEMS]
-            if not tracks: raise RuntimeError("No Spotify tracks found.")
-            await update.effective_message.reply_text(f"🎵 Spotify: {name}\n📥 Queueing {len(tracks)} track(s)…")
-            for t in tracks:
-                track_url=t.get("url") or ""
-                asyncio.create_task(process_one(update.effective_message,context,uid,track_url,True))
-            return
-        except Exception as exc:
-            log.exception("Spotify playlist extraction failed")
-            return await update.effective_message.reply_text(user_error_message(exc))
-    await update.effective_message.reply_text(f"📚 Reading playlist (max {bot.PLAYLIST_MAX_ITEMS})…")
-    try:
-        def extract():
-            with yt_dlp.YoutubeDL({"quiet":True,"no_warnings":True,"extract_flat":"in_playlist","playlistend":bot.PLAYLIST_MAX_ITEMS,"noplaylist":False}) as y:return y.extract_info(url,download=False)
-        info=await asyncio.to_thread(extract);entries=[x for x in (info.get("entries") or []) if x][:bot.PLAYLIST_MAX_ITEMS]
-        if not entries:raise RuntimeError("No entries found")
-        for e in entries:
-            entry_url=e.get("webpage_url") or e.get("url")
-            if entry_url: asyncio.create_task(process_one(update.effective_message,context,uid,entry_url))
-        await update.effective_message.reply_text(f"📥 Queued {len(entries)} playlist item(s).")
-    except Exception as exc:
-        log.exception("playlist extraction failed")
-        await update.effective_message.reply_text(user_error_message(exc))
-
+    main()
