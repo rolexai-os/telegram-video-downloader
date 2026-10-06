@@ -20,7 +20,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.16.0"
+FEATURE_VERSION = "1.17.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -353,8 +353,8 @@ async def admins_cmd(update, context):
     await update.effective_message.reply_text("\n".join(lines),parse_mode="HTML")
 
 async def adminadd_cmd(update, context):
-    if not bot.is_admin(update.effective_user.id):
-        return await update.effective_message.reply_text("❌ Admin only.")
+    if not bot.is_owner(update.effective_user.id):
+        return await update.effective_message.reply_text("❌ Bot owner only. Added administrators cannot add administrators.")
     if not context.args or not context.args[0].isdigit():
         return await update.effective_message.reply_text("Usage: /adminadd <Telegram ID>")
     target=int(context.args[0])
@@ -371,8 +371,8 @@ async def adminadd_cmd(update, context):
     await update.effective_message.reply_text(f"✅ Administrator added: <code>{target}</code>",parse_mode="HTML")
 
 async def adminremove_cmd(update, context):
-    if not bot.is_admin(update.effective_user.id):
-        return await update.effective_message.reply_text("❌ Admin only.")
+    if not bot.is_owner(update.effective_user.id):
+        return await update.effective_message.reply_text("❌ Bot owner only. Added administrators cannot remove administrators.")
     if not context.args or not context.args[0].isdigit():
         return await update.effective_message.reply_text("Usage: /adminremove <Telegram ID>")
     target=int(context.args[0])
