@@ -175,7 +175,7 @@ This release connects the roadmap features that can safely run in the existing s
 
 ## Supported platforms
 
-YouTube and YouTube Shorts links are supported normally through yt-dlp. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
+YouTube and YouTube Shorts links are supported normally through yt-dlp. **Spotify tracks, albums and playlists are supported as metadata inputs.** Spotify track/collection metadata is resolved and the bot searches a publicly available audio source with yt-dlp; it does not rip or bypass Spotify streams. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
 
 ## Commands
 
@@ -187,7 +187,7 @@ YouTube and YouTube Shorts links are supported normally through yt-dlp. Other su
 | /quality <URL> | Interactive quality selection |
 | /mp3 <URL> | Extract audio |
 | /subs <URL> | Download with available captions |
-| /playlist <URL> | Queue an authorized playlist batch |
+| /playlist <URL> | Queue an authorized playlist/batch, including Spotify playlists/albums |
 | /settings | User preferences |
 | /history [search] | Recent/searchable history |
 | /favorites | Saved URLs |
@@ -230,6 +230,10 @@ PLAYLIST_MAX_ITEMS=10
 PROGRESS_UPDATE_SECONDS=3
 DEFAULT_AUDIO_QUALITY=192
 
+# Spotify playlist/album support (track links can use public oEmbed fallback)
+# SPOTIFY_CLIENT_ID=your_client_id
+# SPOTIFY_CLIENT_SECRET=your_client_secret
+
 # Optional
 BOT_OWNER_ID=123456789
 ADMIN_USER_IDS=123456789
@@ -256,7 +260,7 @@ TG_WATCHDOG_INTERVAL=60
 RUNNER_RESTART_DELAY=5
 ~~~
 
-Never commit the real .env, bot token, API keys, or session secrets.
+Never commit the real .env, bot token, Spotify client secret, API keys, or session secrets.
 
 ## Installation
 
@@ -309,6 +313,7 @@ web.py launches runner.py, so the same downloader/retry logic is used locally an
 ## Roadmap status
 
 ### Connected now
+- Spotify track/album/playlist metadata resolution
 - Smart URL analysis and format inspection
 - Queue pause/resume/cancel
 - Personal statistics
