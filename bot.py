@@ -29,7 +29,7 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
-YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","deno").strip()
+YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","auto").strip()
 YTDLP_REMOTE_COMPONENTS=os.getenv("YTDLP_REMOTE_COMPONENTS","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
 TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
@@ -248,6 +248,8 @@ def user_error_message(exc):
         return "⚠️ Spotify playlist/album support needs Spotify API credentials in .env."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
+    if "javascript runtime" in s or "js runtime" in s or "ejs" in s:
+        return "⚠️ YouTube needs Deno or Node.js 22+ for current yt-dlp. Install it and restart the bot."
     if "ffmpeg" in s:
         return "⚠️ The bot could not process this media."
     if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
