@@ -6,6 +6,7 @@ from pathlib import Path
 import yt_dlp
 import bot
 import admin_panel
+import spotify
 from telegram import BotCommand, BotCommandScopeChat
 from telegram.error import Conflict, NetworkError, RetryAfter, TimedOut
 from telegram.ext import TypeHandler
@@ -20,7 +21,7 @@ YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "deno").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.17.0"
+FEATURE_VERSION = "1.18.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -236,6 +237,13 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
 
 def robust_sync_download(url, audio_only=False, progress_hook=None, profile="best", captions=False):
     bot.ensure_supported_url(url)
+    spotify_track = None
+    if spotify.is_spotify_url(url):
+        if spotify.kind(url) != "track":
+            raise RuntimeError("Spotify playlist/album links should be opened with /playlist <URL>.")
+        spotify_track = spotify.track(url)
+        audio_only = True
+        url = spotify.search_query(spotify_track)
     suffix = "mp3" if audio_only else "%(ext)s"
     template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
     last = None
@@ -471,4 +479,34 @@ def main():
             raise SystemExit(CONFLICT_EXIT_CODE)
 
 if __name__ == "__main__":
-    main()
+    main()async def playlist_cmd(update,context):
+    urls=[bot.clean_url(x) for x in bot.URL_RE.findall(" ".join(context.args))]
+    if not urls:return await update.effective_message.reply_text("Usage: /playlist <URL>")
+    uid=update.effective_user.id;url=urls[0]
+    if spotify.is_spotify_url(url):
+        try:
+            name,tracks=await asyncio.to_thread(spotify.collection,url)
+            tracks=tracks[:bot.PLAYLIST_MAX_ITEMS]
+            if not tracks: raise RuntimeError("No Spotify tracks found.")
+            await update.effective_message.reply_text(f"🎵 Spotify: {name}\n📥 Queueing {len(tracks)} track(s)…")
+            for t in tracks:
+                track_url=t.get("url") or ""
+                asyncio.create_task(process_one(update.effective_message,context,uid,track_url,True))
+            return
+        except Exception as exc:
+            log.exception("Spotify playlist extraction failed")
+            return await update.effective_message.reply_text(user_error_message(exc))
+    await update.effective_message.reply_text(f"📚 Reading playlist (max {bot.PLAYLIST_MAX_ITEMS})…")
+    try:
+        def extract():
+            with yt_dlp.YoutubeDL({"quiet":True,"no_warnings":True,"extract_flat":"in_playlist","playlistend":bot.PLAYLIST_MAX_ITEMS,"noplaylist":False}) as y:return y.extract_info(url,download=False)
+        info=await asyncio.to_thread(extract);entries=[x for x in (info.get("entries") or []) if x][:bot.PLAYLIST_MAX_ITEMS]
+        if not entries:raise RuntimeError("No entries found")
+        for e in entries:
+            entry_url=e.get("webpage_url") or e.get("url")
+            if entry_url: asyncio.create_task(process_one(update.effective_message,context,uid,entry_url))
+        await update.effective_message.reply_text(f"📥 Queued {len(entries)} playlist item(s).")
+    except Exception as exc:
+        log.exception("playlist extraction failed")
+        await update.effective_message.reply_text(user_error_message(exc))
+
