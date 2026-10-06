@@ -220,6 +220,12 @@ def resolve_js_runtime():
     if runtime not in {"deno", "node", "quickjs", "bun"}:
         raise RuntimeError(f"Unsupported JavaScript runtime: {runtime}")
     path = shutil.which(executable)
+    if not path and runtime == "deno":
+        for fallback_runtime, fallback_executable in (("node", "node"), ("quickjs", "qjs")):
+            fallback_path = shutil.which(fallback_executable)
+            if fallback_path:
+                log.warning("Configured Deno runtime is unavailable; falling back to %s.", fallback_runtime)
+                return {fallback_runtime: {"path": fallback_path}}
     if not path:
         raise RuntimeError(
             f"Configured JavaScript runtime '{runtime}' is not installed or not in PATH."
