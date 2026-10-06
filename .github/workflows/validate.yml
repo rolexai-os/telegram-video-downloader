@@ -27,8 +27,9 @@ jobs:
           assert callable(bot.main)
           assert callable(bot.download)
           assert not bot.is_disabled_url("https://www.instagram.com/reel/test/")
-          assert bot.is_disabled_url("https://www.youtube.com/watch?v=test")
-          assert bot.is_disabled_url("https://youtu.be/test")
+          assert not bot.is_disabled_url("https://www.youtube.com/watch?v=test")
+          assert not bot.is_disabled_url("https://youtu.be/test")
+          assert bot.ensure_supported_url("https://www.youtube.com/watch?v=test") is None
           class FakeMessage:
               text = "🎬 https://x.com/example/status/1 and https://www.tiktok.com/@example/video/1."
               caption = None
@@ -86,6 +87,9 @@ jobs:
           grep -q 'privacy' admin_panel.py
           grep -q 'adminadd' runner.py
           grep -q 'adminremove' runner.py
+          grep -q 'BOT_OWNER_ID' bot.py
+          grep -q 'is_owner' runner.py
+          grep -q 'Only the bot owner' admin_panel.py
           grep -q 'CREATE TABLE IF NOT EXISTS admins' bot.py
           ! grep -RniE 'COOKIES_|cookie_file_for_url|cookiesfrombrowser|cookiefile|cookie_platform' bot.py runner.py admin_panel.py
           grep -q 'analytics' admin_panel.py
@@ -98,5 +102,5 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.16.0"
+          test "$(cat VERSION)" = "1.17.0"
           test -f admin_panel.py
