@@ -242,6 +242,10 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
+    if "spotify playlist/album" in s:
+        return "⚠️ Use /playlist <Spotify playlist or album URL> for Spotify collections."
+    if "spotify playlist/album support requires" in s:
+        return "⚠️ Spotify playlist/album support needs Spotify API credentials in .env."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "ffmpeg" in s:
@@ -306,14 +310,14 @@ def quality_keyboard(token):
 
 async def start(update,context):
     uid=update.effective_user.id; lang=settings(uid)[0]
-    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported URLs. Use /quality <URL> for interactive quality selection.",reply_markup=main_keyboard())
+    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported URLs, including YouTube and Spotify tracks. Use /playlist <URL> for playlists.",reply_markup=main_keyboard())
 
 async def help_cmd(update,context):
     await update.effective_message.reply_text(
         "📖 Commands\n"
         "/start — open bot menu\n/help — command help\n"
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
-        "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch\n"
+        "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch (including Spotify)\n"
         "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
         "/settings /history /favorites /stats /version /terms\n"
         "/admin or /panel — admin dashboard\n"
