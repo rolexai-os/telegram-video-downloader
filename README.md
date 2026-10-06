@@ -24,6 +24,17 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 
 # Telegram Video Downloader
 
+## v1.19.0 YouTube JavaScript runtime reliability
+
+Current yt-dlp requires a supported JavaScript runtime for full YouTube extraction. The bot now uses YTDLP_JS_RUNTIME=auto by default and detects Deno, Node.js, or QuickJS from PATH. It performs a preflight check for YouTube/YouTube search downloads so a missing runtime fails immediately with a useful message instead of wasting all retry attempts.
+
+- Docker/Render keeps Deno installed and automatically uses it when available.
+- Termux setup installs Node.js LTS automatically; current Termux Node.js LTS satisfies yt-dlp's current Node runtime requirement.
+- setup_termux.sh bootstraps Python, FFmpeg, Git and Node.js LTS without overwriting .env.
+- update.sh and update.py automatically install Node.js LTS on Termux when no supported JS runtime is present.
+- YTDLP_JS_RUNTIME=auto can be replaced with deno, node, quickjs, or RUNTIME:/path/to/runtime when manual selection is required.
+- yt-dlp[default] supplies the matching yt-dlp-ejs package; a JS runtime is still required separately.
+
 ## v1.11.3 automatic link detection
 
 - Sending a normal URL directly to the bot automatically queues the download; no command is required.
@@ -277,9 +288,18 @@ python runner.py
 
 ### Termux
 
+Recommended first-time setup:
+
+~~~bash
+cd telegram-video-downloader
+bash setup_termux.sh
+~~~
+
+Manual setup:
+
 ~~~bash
 pkg update
-pkg install python ffmpeg git
+pkg install python ffmpeg git nodejs-lts
 cd telegram-video-downloader
 python -m venv .venv
 source .venv/bin/activate
@@ -354,4 +374,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.16.0**
+**Testing / Beta — v1.19.0**
