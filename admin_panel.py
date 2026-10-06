@@ -194,17 +194,23 @@ async def panel_callback(update, context):
         lines=[f"👑 <b>Administrators: {len(rows)}</b>",""]
         lines += [f"• <code>{uid}</code>" for uid,_,_ in rows]
         lines.append("")
-        lines.append("Use /adminadd <Telegram ID> or /adminremove <Telegram ID>.")
+        lines.append("Owner: <code>%s</code>" % (bot.BOT_OWNER_ID or "not configured"))
+        lines.append("Only the bot owner can add/remove admins.")
         return await q.edit_message_text("\n".join(lines),parse_mode="HTML",reply_markup=_back())
 
     if action == "adminhelp":
+        if not bot.is_owner(q.from_user.id):
+            return await q.edit_message_text(
+                "👑 <b>Admin Manager</b>\n\n"
+                "Only the bot owner can add or remove administrators. Added administrators can use the admin panel but cannot manage administrators.",
+                parse_mode="HTML",reply_markup=_back())
         return await q.edit_message_text(
             "👑 <b>Admin Manager</b>\n\n"
             "There is no fixed admin limit. Administrators are stored persistently in SQLite.\n\n"
             "➕ Add: <code>/adminadd 123456789</code>\n"
             "➖ Remove: <code>/adminremove 123456789</code>\n"
             "📋 List: <code>/admins</code>\n\n"
-            "The last administrator cannot be removed.",
+            "Only the bot owner can add/remove admins. The owner cannot be removed.",
             parse_mode="HTML",reply_markup=_back())
 
     if action == "privacy":
