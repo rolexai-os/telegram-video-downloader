@@ -29,7 +29,6 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
-YTDLP_REMOTE_COMPONENTS=os.getenv("YTDLP_REMOTE_COMPONENTS","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
 TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
 STORAGE_QUOTA_GB=max(0,float(os.getenv("STORAGE_QUOTA_GB","0")))
@@ -281,7 +280,6 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
-    if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     return o
 
 
