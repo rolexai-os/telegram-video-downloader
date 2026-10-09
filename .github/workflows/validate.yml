@@ -32,9 +32,15 @@ jobs:
           assert spotify.is_spotify_url("https://open.spotify.com/track/123")
           assert spotify.kind("https://open.spotify.com/playlist/123") == "playlist"
           assert not bot.is_disabled_url("https://www.instagram.com/reel/test/")
-          assert not bot.is_disabled_url("https://www.youtube.com/watch?v=test")
-          assert not bot.is_disabled_url("https://youtu.be/test")
-          assert bot.ensure_supported_url("https://www.youtube.com/watch?v=test") is None
+          assert bot.is_disabled_url("https://www.youtube.com/watch?v=test")
+          assert bot.is_disabled_url("https://youtu.be/test")
+          for url in ("https://www.youtube.com/watch?v=test", "https://youtu.be/test"):
+              try:
+                  bot.ensure_supported_url(url)
+              except RuntimeError as exc:
+                  assert "YouTube support has been removed" in str(exc)
+              else:
+                  raise AssertionError("YouTube URL was not blocked")
           class FakeMessage:
               text = "🎬 https://x.com/example/status/1 and https://www.tiktok.com/@example/video/1."
               caption = None
@@ -86,12 +92,7 @@ jobs:
           grep -q 'yt-dlp\[default\]' requirements.txt
           grep -q 'spotify.py' README.md || true
           grep -q 'SPOTIFY_CLIENT_ID' .env.example
-          grep -q 'deno' Dockerfile
-          grep -q 'YTDLP_JS_RUNTIME=auto' .env.example
-          grep -q 'resolve_js_runtime' runner.py
-          grep -q 'youtube_runtime_preflight' runner.py
           grep -q 'setup_termux.sh' README.md
-          grep -q 'nodejs-lts' setup_termux.sh
           grep -Eq 'apt-get install.*unzip' Dockerfile
           grep -q 'BotCommand' runner.py
           grep -q 'audit_update' runner.py
@@ -114,5 +115,5 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.19.0"
+          test "$(cat VERSION)" = "1.20.0"
           test -f admin_panel.py
