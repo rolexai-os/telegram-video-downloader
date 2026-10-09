@@ -526,8 +526,10 @@ async def subs_cmd(update,context):
 async def playlist_cmd(update,context):
     urls=[clean_url(x) for x in URL_RE.findall(" ".join(context.args))]
     if not urls:return await update.effective_message.reply_text("Usage: /playlist <URL>")
-    uid=update.effective_user.id;url=urls[0];await update.effective_message.reply_text(f"📚 Reading playlist (max {PLAYLIST_MAX_ITEMS})…")
+    uid=update.effective_user.id;url=urls[0]
     try:
+        ensure_supported_url(url)
+        await update.effective_message.reply_text(f"📚 Reading playlist (max {PLAYLIST_MAX_ITEMS})…")
         def extract():
             with yt_dlp.YoutubeDL({"quiet":True,"no_warnings":True,"extract_flat":"in_playlist","playlistend":PLAYLIST_MAX_ITEMS,"noplaylist":False}) as y:return y.extract_info(url,download=False)
         info=await asyncio.to_thread(extract);entries=[x for x in (info.get("entries") or []) if x][:PLAYLIST_MAX_ITEMS]
