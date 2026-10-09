@@ -14,7 +14,7 @@ fi
 
 echo "📦 Installing Termux dependencies..."
 pkg update
-pkg install -y python ffmpeg git
+pkg install -y python ffmpeg git nodejs-lts
 
 echo "🐍 Preparing Python environment..."
 if [ ! -d .venv ]; then
@@ -31,5 +31,6 @@ else
 fi
 
 echo ""
-echo "✅ Setup complete. YouTube downloads are disabled in this release."
+echo "🔎 JavaScript runtime: $(command -v deno || command -v node || echo not-found)"
+echo "✅ YouTube videos and Shorts are enabled when a supported runtime is available."
 echo "Start with: .venv/bin/python runner.py"
