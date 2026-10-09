@@ -476,6 +476,7 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
 async def inspect_formats(url):
     def run():
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
+        o.update(yt_dlp_js_options())
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
     return await asyncio.to_thread(run)
 
@@ -544,7 +545,9 @@ async def playlist_cmd(update,context):
         ensure_supported_url(url)
         await update.effective_message.reply_text(f"📚 Reading playlist (max {PLAYLIST_MAX_ITEMS})…")
         def extract():
-            with yt_dlp.YoutubeDL({"quiet":True,"no_warnings":True,"extract_flat":"in_playlist","playlistend":PLAYLIST_MAX_ITEMS,"noplaylist":False}) as y:return y.extract_info(url,download=False)
+            opts={"quiet":True,"no_warnings":True,"extract_flat":"in_playlist","playlistend":PLAYLIST_MAX_ITEMS,"noplaylist":False}
+            opts.update(yt_dlp_js_options())
+            with yt_dlp.YoutubeDL(opts) as y:return y.extract_info(url,download=False)
         info=await asyncio.to_thread(extract);entries=[x for x in (info.get("entries") or []) if x][:PLAYLIST_MAX_ITEMS]
         if not entries:raise RuntimeError("No entries found")
         for e in entries:
