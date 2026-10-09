@@ -7,6 +7,10 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
 echo "🔄 Checking for Telegram Video Downloader updates..."
+if command -v pkg >/dev/null 2>&1 && ! command -v deno >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
+  echo "📦 Installing Node.js LTS for YouTube support..."
+  pkg install -y nodejs-lts
+fi
 
 if [ ! -d .git ]; then
   echo "❌ This installation is not a Git checkout."
