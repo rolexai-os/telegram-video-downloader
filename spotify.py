@@ -84,4 +84,4 @@ def collection(url):
     return data.get("name","Spotify Album"),[_track(x) for x in data.get("tracks",{}).get("items",[])]
 
 def search_query(track_info):
-    return f"ytsearch1:{track_info['artist']} - {track_info['title']}".strip(" -")
+    raise RuntimeError("Spotify download resolution is disabled because it previously depended on YouTube search.")
