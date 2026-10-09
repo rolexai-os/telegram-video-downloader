@@ -54,9 +54,11 @@ def resolve_js_runtime():
         if ":" in configured:
             name,path=configured.split(":",1)
             return {name:{"path":path}}
-        executable={"quickjs":"qjs","qjs":"qjs"}.get(configured,configured)
+        executable={"quickjs":"qjs","qjs":"qjs","nodejs":"node"}.get(configured,configured)
         found=shutil.which(executable)
-        return {configured:{"path":found}} if found else {}
+        if found:
+            return {configured:{"path":found}}
+        # A stale explicit setting should not disable YouTube if another supported runtime is installed.
     for name,executable in (("deno","deno"),("node","node"),("quickjs","qjs")):
         found=shutil.which(executable)
         if found:
