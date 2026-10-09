@@ -29,7 +29,6 @@ SERVER_HOSTNAME=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip() or socket.getho
 SERVER_ID=os.getenv("SERVER_ID","").strip() or f"{SERVER_KIND}:{SERVER_HOSTNAME}"
 SERVER_LABEL=SERVER_NAME or (f"Render / {os.getenv('RENDER_SERVICE_NAME', 'telegram-video-downloader')}" if SERVER_KIND=="render" else f"Local / {SERVER_HOSTNAME}")
 LOG_URLS=os.getenv("LOG_URLS","1").lower() in {"1","true","yes","on"}
-YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","auto").strip()
 YTDLP_REMOTE_COMPONENTS=os.getenv("YTDLP_REMOTE_COMPONENTS","").strip()
 MAX_FILE_SIZE_MB=max(0,int(os.getenv("MAX_FILE_SIZE_MB","0"))); MAX_FILE_SIZE=MAX_FILE_SIZE_MB*1024*1024 if MAX_FILE_SIZE_MB else 0
 TELEGRAM_UPLOAD_CHUNK_MB=max(5,int(os.getenv("TELEGRAM_UPLOAD_CHUNK_MB","45"))); TELEGRAM_UPLOAD_CHUNK_SIZE=TELEGRAM_UPLOAD_CHUNK_MB*1024*1024
@@ -44,7 +43,6 @@ PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
 BOT_OWNER_ID=int(os.getenv("BOT_OWNER_ID","0").strip() or "0")
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
-YOUTUBE_HOSTS={"youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be","www.youtu.be","youtube-nocookie.com","www.youtube-nocookie.com"}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
@@ -57,14 +55,18 @@ def is_youtube_url(url):
     try:
         from urllib.parse import urlparse
         host=urlparse(url).netloc.lower().split("@")[-1].split(":")[0]
-        return host in YOUTUBE_HOSTS or host.endswith(".youtube.com")
+        return host in {"youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be","www.youtu.be","youtube-nocookie.com","www.youtube-nocookie.com"} or host.endswith(".youtube.com")
     except Exception:
         return False
 
 def is_disabled_url(url):
-    return False
+    return is_youtube_url(url)
 
 def ensure_supported_url(url):
+    if is_youtube_url(url):
+        raise RuntimeError("YouTube support has been removed from this bot.")
+    if "open.spotify.com/" in str(url).lower() or "play.spotify.com/" in str(url).lower():
+        raise RuntimeError("Spotify download support is unavailable because it previously depended on YouTube search. Use a supported direct media URL instead.")
     return None
 
 def extract_message_urls(message):
@@ -248,8 +250,10 @@ def user_error_message(exc):
         return "⚠️ Spotify playlist/album support needs Spotify API credentials in .env."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
-    if "javascript runtime" in s or "js runtime" in s or "ejs" in s:
-        return "⚠️ YouTube needs Deno or Node.js 22+ for current yt-dlp. Install it and restart the bot."
+    if "youtube support has been removed" in s:
+        return "🚫 YouTube links are no longer supported by this bot."
+    if "spotify download support is unavailable" in s:
+        return "🚫 Spotify downloads are disabled in this release. Send a supported direct media URL instead."
     if "ffmpeg" in s:
         return "⚠️ The bot could not process this media."
     if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
@@ -277,7 +281,6 @@ def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=F
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
-    if YTDLP_JS_RUNTIME:o["js_runtimes"]={YTDLP_JS_RUNTIME:{}}
     if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
     return o
 
@@ -312,7 +315,7 @@ def quality_keyboard(token):
 
 async def start(update,context):
     uid=update.effective_user.id; lang=settings(uid)[0]
-    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported URLs, including YouTube and Spotify tracks. Use /playlist <URL> for playlists.",reply_markup=main_keyboard())
+    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported social-media URLs. YouTube and Spotify downloads are disabled. Use /playlist <URL> for supported playlists.",reply_markup=main_keyboard())
 
 async def help_cmd(update,context):
     await update.effective_message.reply_text(
