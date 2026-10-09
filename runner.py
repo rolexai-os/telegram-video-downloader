@@ -277,6 +277,7 @@ async def analyze_cmd(update, context):
         def inspect():
             opts = {"quiet": True, "no_warnings": True, "skip_download": True,
                     "noplaylist": True, "socket_timeout": 20}
+            opts.update(bot.yt_dlp_js_options())
             with yt_dlp.YoutubeDL(opts) as y: return y.extract_info(url, download=False)
         info = await asyncio.to_thread(inspect)
         formats = info.get("formats", []) if info else []
