@@ -32,15 +32,11 @@ jobs:
           assert spotify.is_spotify_url("https://open.spotify.com/track/123")
           assert spotify.kind("https://open.spotify.com/playlist/123") == "playlist"
           assert not bot.is_disabled_url("https://www.instagram.com/reel/test/")
-          assert bot.is_disabled_url("https://www.youtube.com/watch?v=test")
-          assert bot.is_disabled_url("https://youtu.be/test")
-          for url in ("https://www.youtube.com/watch?v=test", "https://youtu.be/test"):
-              try:
-                  bot.ensure_supported_url(url)
-              except RuntimeError as exc:
-                  assert "YouTube support has been removed" in str(exc)
-              else:
-                  raise AssertionError("YouTube URL was not blocked")
+          assert not bot.is_disabled_url("https://www.youtube.com/watch?v=test")
+          assert not bot.is_disabled_url("https://youtu.be/test")
+          assert bot.ensure_supported_url("https://www.youtube.com/watch?v=test") is None
+          assert callable(bot.resolve_js_runtime)
+          assert callable(bot.yt_dlp_js_options)
           class FakeMessage:
               text = "🎬 https://x.com/example/status/1 and https://www.tiktok.com/@example/video/1."
               caption = None
@@ -114,5 +110,5 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.20.0"
+          test "$(cat VERSION)" = "1.21.0"
           test -f admin_panel.py
