@@ -52,11 +52,6 @@ rm -f cookies.txt
 PYTHON="python3"
 [ -x .venv/bin/python ] && PYTHON=".venv/bin/python"
 
-if command -v pkg >/dev/null 2>&1 && ! command -v deno >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-  echo "📦 No supported JavaScript runtime found. Installing Termux Node.js LTS for YouTube..."
-  pkg install -y nodejs-lts
-fi
-
 if [ -x .venv/bin/pip ]; then
   .venv/bin/pip install -q -r requirements.txt
 else
