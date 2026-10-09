@@ -14,7 +14,7 @@ fi
 
 echo "📦 Installing Termux dependencies..."
 pkg update
-pkg install -y python ffmpeg git nodejs-lts
+pkg install -y python ffmpeg git
 
 echo "🐍 Preparing Python environment..."
 if [ ! -d .venv ]; then
@@ -31,14 +31,5 @@ else
 fi
 
 echo ""
-echo "🔎 JavaScript runtime:"
-node --version
-.venv/bin/python - <<'PY'
-import shutil
-print("node:", shutil.which("node") or "NOT FOUND")
-print("deno:", shutil.which("deno") or "not installed (Node.js fallback is OK)")
-PY
-
-echo ""
-echo "✅ Termux setup complete."
+echo "✅ Setup complete. YouTube downloads are disabled in this release."
 echo "Start with: .venv/bin/python runner.py"
