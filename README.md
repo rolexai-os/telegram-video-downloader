@@ -237,8 +237,6 @@ PLAYLIST_MAX_ITEMS=10
 PROGRESS_UPDATE_SECONDS=3
 DEFAULT_AUDIO_QUALITY=192
 
-# Spotify playlist/album support (track links can use public oEmbed fallback)
-
 # Optional
 BOT_OWNER_ID=123456789
 ADMIN_USER_IDS=123456789
