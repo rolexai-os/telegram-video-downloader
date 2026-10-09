@@ -45,6 +45,28 @@ ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(","
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
 WEBHOOK_SECRET=os.getenv("WEBHOOK_SECRET","").strip(); PORT=int(os.getenv("PORT","10000"))
 
+YTDLP_JS_RUNTIME=os.getenv("YTDLP_JS_RUNTIME","auto").strip().lower()
+
+def resolve_js_runtime():
+    """Detect a supported JavaScript runtime for yt-dlp's YouTube extractor."""
+    configured=YTDLP_JS_RUNTIME or "auto"
+    if configured not in {"auto","off","none","disabled"}:
+        if ":" in configured:
+            name,path=configured.split(":",1)
+            return {name:{"path":path}}
+        executable={"quickjs":"qjs","qjs":"qjs"}.get(configured,configured)
+        found=shutil.which(executable)
+        return {configured:{"path":found}} if found else {}
+    for name,executable in (("deno","deno"),("node","node"),("quickjs","qjs")):
+        found=shutil.which(executable)
+        if found:
+            return {name:{"path":found}}
+    return {}
+
+def yt_dlp_js_options():
+    runtime=resolve_js_runtime()
+    return {"js_runtimes":runtime} if runtime else {}
+
 LOG_FILE=Path(os.getenv("APP_LOG_FILE","bot.log"))
 logging.basicConfig(level=logging.INFO,format="%(asctime)s | %(levelname)s | %(message)s",handlers=[logging.StreamHandler(),logging.FileHandler(LOG_FILE,encoding="utf-8")])
 logger=logging.getLogger("telegram-video-downloader")
@@ -243,10 +265,10 @@ def user_error_message(exc):
         return "⚠️ This media is unavailable or no longer exists."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
-    if "youtube support has been removed" in s:
-        return "🚫 YouTube links are no longer supported by this bot."
-    if "spotify download support is unavailable" in s:
+    if "spotify download" in s and "disabled" in s:
         return "🚫 Spotify downloads are disabled in this release. Send a supported direct media URL instead."
+    if "javascript runtime" in s or "js runtime" in s or "ejs" in s:
+        return "⚠️ YouTube needs Deno or Node.js 22+ for current yt-dlp. Install a supported runtime and restart the bot."
     if "ffmpeg" in s:
         return "⚠️ The bot could not process this media."
     if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
@@ -271,6 +293,7 @@ def fmt(profile):
 
 def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=False,url=""):
     o={"format":"bestaudio/best" if audio else fmt(profile),"outtmpl":template,"merge_output_format":"mp4","noplaylist":not playlist,"quiet":True,"no_warnings":False,"retries":5,"fragment_retries":5,"file_access_retries":3,"extractor_retries":3,"socket_timeout":30,"continuedl":True,"overwrites":False,"restrictfilenames":False,"windowsfilenames":True,"concurrent_fragment_downloads":2}
+    o.update(yt_dlp_js_options())
     if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
@@ -307,7 +330,7 @@ def quality_keyboard(token):
 
 async def start(update,context):
     uid=update.effective_user.id; lang=settings(uid)[0]
-    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend one or more supported social-media URLs. YouTube and Spotify downloads are disabled. Use /playlist <URL> for supported playlists.",reply_markup=main_keyboard())
+    await update.effective_message.reply_text(f"{LANG.get(lang,LANG['en'])}\n\nSend supported social-media URLs, including YouTube videos and Shorts. Spotify audio downloads are disabled. Use /playlist <URL> for supported playlists.",reply_markup=main_keyboard())
 
 async def help_cmd(update,context):
     await update.effective_message.reply_text(
