@@ -62,9 +62,6 @@ def main():
         except OSError as exc:
             print(f"⚠️ Could not remove legacy credential data {legacy}: {exc}")
 
-    if os.environ.get("PREFIX") and shutil.which("pkg") and not (shutil.which("deno") or shutil.which("node")):
-        print("📦 No supported JavaScript runtime found. Installing Termux Node.js LTS for YouTube...")
-        run("pkg", "install", "-y", "nodejs-lts")
 
     pip = ROOT / ".venv" / "bin" / "pip"
     if pip.exists():
