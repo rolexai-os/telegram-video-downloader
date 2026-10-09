@@ -461,8 +461,7 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
 async def inspect_formats(url):
     def run():
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
-        if YTDLP_JS_RUNTIME:o["js_runtimes"]={YTDLP_JS_RUNTIME:{}}
-        if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
+            if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
     return await asyncio.to_thread(run)
 
