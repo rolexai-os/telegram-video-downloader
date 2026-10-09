@@ -19,7 +19,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.20.0"
+FEATURE_VERSION = "1.21.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -201,6 +201,7 @@ def classify_error(exc):
         (("ssl","tls","certificate"), "TLS/SSL connection failed."),
         (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg is installed."),
         (("unsupported url",), "This URL is not supported by yt-dlp."),
+        (("javascript runtime","js runtime","ejs"), "YouTube needs Deno or Node.js 22+; install a supported runtime and update yt-dlp."),
         (("login","sign in","authentication"), "The source requires authentication; this bot does not provide session-cookie access."),
     ]
     for needles, message in rules:
@@ -208,7 +209,7 @@ def classify_error(exc):
             return message
     return "Download failed. Check the URL and bot logs."
 
-def download_options(template, audio, hook, attempt, profile="best", captions=False, url="", runtime_spec=None):
+def download_options(template, audio, hook, attempt, profile="best", captions=False, url=""):
     o = {
         "format": "bestaudio/best" if audio else bot.format_for_quality(profile),
         "outtmpl": template, "merge_output_format": "mp4", "noplaylist": True,
@@ -225,13 +226,13 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
         o.update(writesubtitles=True, writeautomaticsub=True,
                  subtitleslangs=["all"], subtitlesformat="srt/vtt/best")
     if hook: o["progress_hooks"] = [hook]
+    o.update(bot.yt_dlp_js_options())
     if FORCE_IPV4 or attempt >= 2: o["source_address"] = "0.0.0.0"
     ua = USER_AGENT or (DEFAULT_UA if attempt >= 2 else "")
     if ua: o["http_headers"] = {"User-Agent": ua}
     return o
 
 def robust_sync_download(url, audio_only=False, progress_hook=None, profile="best", captions=False):
-    bot.ensure_supported_url(url)
     bot.ensure_supported_url(url)
     suffix = "mp3" if audio_only else "%(ext)s"
     template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
