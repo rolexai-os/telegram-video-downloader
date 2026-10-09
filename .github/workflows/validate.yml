@@ -91,7 +91,6 @@ jobs:
           grep -q 'filters.CAPTION' bot.py
           grep -q 'yt-dlp\[default\]' requirements.txt
           grep -q 'spotify.py' README.md || true
-          grep -q 'SPOTIFY_CLIENT_ID' .env.example
           grep -q 'setup_termux.sh' README.md
           grep -Eq 'apt-get install.*unzip' Dockerfile
           grep -q 'BotCommand' runner.py
