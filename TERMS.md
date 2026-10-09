@@ -34,7 +34,7 @@ You must comply with applicable laws in your jurisdiction and with the rules of 
 
 ## 4. Third-party services
 
-This project uses third-party software and services, including Telegram and yt-dlp-supported websites. Their availability, policies, APIs, authentication requirements, and terms may change independently of this project.
+This project uses third-party software and services, including Telegram and supported third-party media websites. YouTube download support is disabled in this project. Their availability, policies, APIs, authentication requirements, and terms may change independently of this project.
 
 This project is not affiliated with or endorsed by Telegram, X, Facebook, TikTok, Reddit, Vimeo, Dailymotion, or other third-party platforms unless explicitly stated.
 
