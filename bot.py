@@ -59,13 +59,11 @@ def is_youtube_url(url):
         return False
 
 def is_disabled_url(url):
-    return is_youtube_url(url)
+    return False
 
 def ensure_supported_url(url):
-    if is_youtube_url(url):
-        raise RuntimeError("YouTube support has been removed from this bot.")
     if "open.spotify.com/" in str(url).lower() or "play.spotify.com/" in str(url).lower():
-        raise RuntimeError("Spotify download support is unavailable because it previously depended on YouTube search. Use a supported direct media URL instead.")
+        raise RuntimeError("Spotify downloads are disabled in this release. Send a supported direct media URL instead.")
     return None
 
 def extract_message_urls(message):
