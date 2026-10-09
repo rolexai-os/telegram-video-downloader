@@ -25,6 +25,10 @@ def main():
         print("❌ Not a Git installation. Reinstall from the official repository.")
         return 1
 
+    if os.environ.get("PREFIX") and shutil.which("pkg") and not shutil.which("deno") and not shutil.which("node"):
+        print("📦 Installing Node.js LTS for YouTube support...")
+        run("pkg", "install", "-y", "nodejs-lts")
+
     print("🔄 Checking for updates...")
     run("git", "fetch", "--quiet", "origin", BRANCH)
     local = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
