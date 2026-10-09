@@ -243,10 +243,6 @@ def user_error_message(exc):
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
-    if "spotify playlist/album" in s:
-        return "⚠️ Use /playlist <Spotify playlist or album URL> for Spotify collections."
-    if "spotify playlist/album support requires" in s:
-        return "⚠️ Spotify playlist/album support needs Spotify API credentials in .env."
     if "unsupported url" in s:
         return "⚠️ This link is not supported."
     if "youtube support has been removed" in s:
@@ -320,7 +316,7 @@ async def help_cmd(update,context):
         "📖 Commands\n"
         "/start — open bot menu\n/help — command help\n"
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
-        "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch (including Spotify)\n"
+        "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch for supported sources\n"
         "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
         "/settings /history /favorites /stats /version /terms\n"
         "/admin or /panel — admin dashboard\n"
@@ -459,7 +455,6 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
 async def inspect_formats(url):
     def run():
         o={"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True,"socket_timeout":20}
-            if YTDLP_REMOTE_COMPONENTS:o["remote_components"]=[x.strip() for x in YTDLP_REMOTE_COMPONENTS.split(",") if x.strip()]
         with yt_dlp.YoutubeDL(o) as y:return y.extract_info(url,download=False)
     return await asyncio.to_thread(run)
 
