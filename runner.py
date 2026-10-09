@@ -17,11 +17,10 @@ MAX_ATTEMPTS = max(1, int(os.getenv("YTDLP_MAX_ATTEMPTS", "3")))
 RETRY_DELAY = max(0.5, float(os.getenv("YTDLP_RETRY_DELAY", "2")))
 FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on"}
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
-YTDLP_JS_RUNTIME = os.getenv("YTDLP_JS_RUNTIME", "auto").strip()
 YTDLP_REMOTE_COMPONENTS = os.getenv("YTDLP_REMOTE_COMPONENTS", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.19.0"
+FEATURE_VERSION = "1.20.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
