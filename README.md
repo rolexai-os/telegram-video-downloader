@@ -24,12 +24,14 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 
 # Telegram Video Downloader
 
-## v1.20.0 YouTube support removed
+## v1.21.0 YouTube support restored
 
-- YouTube and YouTube Shorts URLs are blocked before download or analysis.
-- Removed JavaScript-runtime detection, YouTube preflight checks, and YouTube-specific installation steps.
-- Spotify audio downloads are disabled because the previous implementation resolved audio through YouTube search.
-- Other supported direct media URLs and non-YouTube yt-dlp extractors remain available.
+- Re-enabled YouTube videos, Shorts, and playlist URLs.
+- Automatically detects Deno, Node.js, or QuickJS and passes the selected runtime to yt-dlp.
+- Termux setup/update installs Node.js LTS when no runtime is present; Docker installs Deno.
+- The `yt-dlp[default]` dependency supplies matching `yt-dlp-ejs` challenge scripts.
+- Spotify audio downloads remain disabled because the previous implementation resolved audio through YouTube search.
+- YouTube extraction can still be affected by upstream changes, rate limits, or videos requiring authentication.
 
 ## v1.11.3 automatic link detection
 
@@ -182,7 +184,7 @@ This release connects the roadmap features that can safely run in the existing s
 
 ## Supported platforms
 
-YouTube and YouTube Shorts are not supported and are explicitly blocked. Spotify audio downloading is also disabled because the previous implementation used YouTube search to locate audio. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
+YouTube videos and Shorts are supported through yt-dlp when a supported JavaScript runtime and EJS components are available. Spotify audio downloading remains disabled because this project does not use YouTube search to resolve Spotify tracks. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
 
 ## Commands
 
@@ -249,6 +251,7 @@ SERVER_HEARTBEAT_INTERVAL=30
 YTDLP_MAX_ATTEMPTS=3
 YTDLP_RETRY_DELAY=2
 YTDLP_FORCE_IPV4=0
+YTDLP_JS_RUNTIME=auto
 # YTDLP_USER_AGENT=
 
 TG_CONNECT_TIMEOUT=20
@@ -291,7 +294,7 @@ Manual setup:
 
 ~~~bash
 pkg update
-pkg install python ffmpeg git
+pkg install python ffmpeg git nodejs-lts
 cd telegram-video-downloader
 python -m venv .venv
 source .venv/bin/activate
@@ -325,7 +328,7 @@ web.py launches runner.py, so the same downloader/retry logic is used locally an
 ## Roadmap status
 
 ### Connected now
-- YouTube and Spotify download paths removed
+- YouTube support restored; Spotify audio download remains disabled
 - Smart URL analysis and format inspection
 - Queue pause/resume/cancel
 - Personal statistics
@@ -366,4 +369,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.20.0**
+**Testing / Beta — v1.21.0**
