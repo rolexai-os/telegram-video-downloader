@@ -24,16 +24,12 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 
 # Telegram Video Downloader
 
-## v1.19.0 YouTube JavaScript runtime reliability
+## v1.20.0 YouTube support removed
 
-Current yt-dlp requires a supported JavaScript runtime for full YouTube extraction. The bot now uses YTDLP_JS_RUNTIME=auto by default and detects Deno, Node.js, or QuickJS from PATH. It performs a preflight check for YouTube/YouTube search downloads so a missing runtime fails immediately with a useful message instead of wasting all retry attempts.
-
-- Docker/Render keeps Deno installed and automatically uses it when available.
-- Termux setup installs Node.js LTS automatically; current Termux Node.js LTS satisfies yt-dlp's current Node runtime requirement.
-- setup_termux.sh bootstraps Python, FFmpeg, Git and Node.js LTS without overwriting .env.
-- update.sh and update.py automatically install Node.js LTS on Termux when no supported JS runtime is present.
-- YTDLP_JS_RUNTIME=auto can be replaced with deno, node, quickjs, or RUNTIME:/path/to/runtime when manual selection is required.
-- yt-dlp[default] supplies the matching yt-dlp-ejs package; a JS runtime is still required separately.
+- YouTube and YouTube Shorts URLs are blocked before download or analysis.
+- Removed JavaScript-runtime detection, YouTube preflight checks, and YouTube-specific installation steps.
+- Spotify audio downloads are disabled because the previous implementation resolved audio through YouTube search.
+- Other supported direct media URLs and non-YouTube yt-dlp extractors remain available.
 
 ## v1.11.3 automatic link detection
 
@@ -186,7 +182,7 @@ This release connects the roadmap features that can safely run in the existing s
 
 ## Supported platforms
 
-YouTube and YouTube Shorts links are supported normally through yt-dlp. **Spotify tracks, albums and playlists are supported as metadata inputs.** Spotify track/collection metadata is resolved and the bot searches a publicly available audio source with yt-dlp; it does not rip or bypass Spotify streams. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
+YouTube and YouTube Shorts are not supported and are explicitly blocked. Spotify audio downloading is also disabled because the previous implementation used YouTube search to locate audio. Other supported sites continue to use yt-dlp. This project does not use browser cookies, imported login state, or stored authentication credentials.
 
 ## Commands
 
@@ -198,7 +194,7 @@ YouTube and YouTube Shorts links are supported normally through yt-dlp. **Spotif
 | /quality <URL> | Interactive quality selection |
 | /mp3 <URL> | Extract audio |
 | /subs <URL> | Download with available captions |
-| /playlist <URL> | Queue an authorized playlist/batch, including Spotify playlists/albums |
+| /playlist <URL> | Queue an authorized playlist/batch, for supported sources |
 | /settings | User preferences |
 | /history [search] | Recent/searchable history |
 | /favorites | Saved URLs |
@@ -242,8 +238,6 @@ PROGRESS_UPDATE_SECONDS=3
 DEFAULT_AUDIO_QUALITY=192
 
 # Spotify playlist/album support (track links can use public oEmbed fallback)
-# SPOTIFY_CLIENT_ID=your_client_id
-# SPOTIFY_CLIENT_SECRET=your_client_secret
 
 # Optional
 BOT_OWNER_ID=123456789
@@ -271,7 +265,7 @@ TG_WATCHDOG_INTERVAL=60
 RUNNER_RESTART_DELAY=5
 ~~~
 
-Never commit the real .env, bot token, Spotify client secret, API keys, or session secrets.
+Never commit the real .env, bot token, API keys, or session secrets.
 
 ## Installation
 
@@ -299,7 +293,7 @@ Manual setup:
 
 ~~~bash
 pkg update
-pkg install python ffmpeg git nodejs-lts
+pkg install python ffmpeg git
 cd telegram-video-downloader
 python -m venv .venv
 source .venv/bin/activate
@@ -333,7 +327,7 @@ web.py launches runner.py, so the same downloader/retry logic is used locally an
 ## Roadmap status
 
 ### Connected now
-- Spotify track/album/playlist metadata resolution
+- YouTube and Spotify download paths removed
 - Smart URL analysis and format inspection
 - Queue pause/resume/cancel
 - Personal statistics
@@ -374,4 +368,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.19.0**
+**Testing / Beta — v1.20.0**
