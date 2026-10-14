@@ -18,7 +18,9 @@ jobs:
       - name: Validate shell scripts
         run: bash -n setup_termux.sh update.sh
       - name: Compile Python files
-        run: python -m compileall -q bot.py runner.py admin_panel.py web.py update.py spotify.py
+        run: python -m compileall -q bot.py runner.py admin_panel.py web.py update.py spotify.py tests
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
       - name: Import and entrypoint smoke test
         run: |
           python - <<'PY'
@@ -38,6 +40,9 @@ jobs:
           assert callable(bot.resolve_js_runtime)
           assert callable(bot.yt_dlp_js_options)
           assert bot.output_template().endswith("%(ext)s")
+          assert bot.DEFAULT_AUDIO_QUALITY in {"128", "192", "256", "320"}
+          assert callable(bot.history_search_query)
+          assert callable(runner.health_cmd) and callable(runner.platforms_cmd)
           assert bot.opts("sample.%(ext)s", audio=True)["postprocessors"][0]["preferredcodec"] == "mp3"
           assert runner.download_options("sample.%(ext)s", True, None, 1)["outtmpl"].endswith("%(ext)s")
           assert "FFprobe" in bot.user_error_message("ffprobe not found")
@@ -114,5 +119,9 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.21.1"
+          test "$(cat VERSION)" = "1.22.0"
+          grep -q "async def health_cmd" runner.py
+          grep -q "async def platforms_cmd" runner.py
+          grep -q "history_search_query" bot.py
+          test -f tests/test_features.py
           test -f admin_panel.py
