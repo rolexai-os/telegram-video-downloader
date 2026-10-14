@@ -24,6 +24,15 @@ The panel remains Telegram-only and admin-ID protected. It does not expose a pub
 
 # Telegram Video Downloader
 
+## v1.21.1 MP3 conversion fix
+
+- Fixed MP3 downloads using a premature `.mp3` filename before yt-dlp/FFmpeg had converted the source media.
+- Download output templates now preserve yt-dlp's actual source extension; the MP3 postprocessor creates the final `.mp3` file.
+- Audio file detection now prioritizes the converted MP3 and never returns the original video as an audio upload.
+- Added an early FFmpeg/FFprobe availability check with a clear user-facing error instead of a late conversion failure.
+- MP3 quality now respects `DEFAULT_AUDIO_QUALITY` in both the direct bot and runner download paths.
+- Added GitHub Actions smoke checks for audio output templates, postprocessor configuration, and missing-FFprobe guidance.
+
 ## v1.21.0 YouTube support restored
 
 - Re-enabled YouTube videos, Shorts, and playlist URLs.
@@ -369,4 +378,4 @@ Only download content you are legally permitted to access/download. Do not bypas
 
 ## Status
 
-**Testing / Beta — v1.21.0**
+**Testing / Beta — v1.21.1**
