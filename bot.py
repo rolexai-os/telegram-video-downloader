@@ -271,8 +271,10 @@ def user_error_message(exc):
         return "🚫 Spotify downloads are disabled in this release. Send a supported direct media URL instead."
     if "javascript runtime" in s or "js runtime" in s or "ejs" in s:
         return "⚠️ YouTube needs Deno or Node.js 22+ for current yt-dlp. Install a supported runtime and restart the bot."
+    if "ffprobe" in s and ("not found" in s or "required" in s):
+        return "⚠️ MP3 conversion needs FFmpeg and FFprobe. Install the ffmpeg package and restart the bot."
     if "ffmpeg" in s:
-        return "⚠️ The bot could not process this media."
+        return "⚠️ FFmpeg could not convert this media. Check free storage and that FFmpeg/FFprobe are installed."
     if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
         return "⚠️ A temporary network problem prevented this download."
     if "above the configured" in s or ("file is " in s and "mb" in s):
@@ -296,23 +298,41 @@ def fmt(profile):
 def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=False,url=""):
     o={"format":"bestaudio/best" if audio else fmt(profile),"outtmpl":template,"merge_output_format":"mp4","noplaylist":not playlist,"quiet":True,"no_warnings":False,"retries":5,"fragment_retries":5,"file_access_retries":3,"extractor_retries":3,"socket_timeout":30,"continuedl":True,"overwrites":False,"restrictfilenames":False,"windowsfilenames":True,"concurrent_fragment_downloads":2}
     o.update(yt_dlp_js_options())
-    if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
+    if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":os.getenv("DEFAULT_AUDIO_QUALITY","192")}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
     return o
 
 
+def output_template():
+    """Keep yt-dlp's real source extension until FFmpeg post-processing finishes."""
+    return str(DOWNLOAD_DIR / "%(title).180B [%(id)s].%(ext)s")
+
+
+def require_mp3_tools():
+    """Fail early with a useful message instead of downloading then failing conversion."""
+    missing = [name for name in ("ffmpeg", "ffprobe") if not shutil.which(name)]
+    if missing:
+        raise RuntimeError("MP3 conversion requires FFmpeg and FFprobe. Install the ffmpeg package, then restart the bot.")
+
+
 def locate(ydl,info,audio=False):
     if not info:return None
-    p=Path(ydl.prepare_filename(info)); candidates=[p]
-    if audio:candidates += [p.with_suffix(".mp3"),p.with_suffix(".m4a")]
-    candidates += sorted(DOWNLOAD_DIR.glob(f"{p.stem}.*"),key=lambda x:x.stat().st_mtime,reverse=True)
+    p=Path(ydl.prepare_filename(info))
+    recent=sorted(DOWNLOAD_DIR.glob(f"{p.stem}.*"),key=lambda x:x.stat().st_mtime,reverse=True)
+    if audio:
+        # Prefer the post-processed output and never return the downloaded video as audio.
+        candidates=[p.with_suffix(".mp3"),p.with_suffix(".m4a")]
+        candidates += [x for x in recent if x.suffix.lower() in {".mp3",".m4a"}]
+        return next((x for x in candidates if x.is_file() and x.stat().st_size),None)
+    candidates=[p]+recent
     return next((x for x in candidates if x.is_file() and x.stat().st_size),None)
 
 
 def sync_download(url,audio=False,hook=None,profile="best",captions=False):
     ensure_supported_url(url)
-    ext="mp3" if audio else "%(ext)s"; template=str(DOWNLOAD_DIR/f"%(title).180B [%(id)s].{ext}")
+    template=output_template()
+    if audio:require_mp3_tools()
     with yt_dlp.YoutubeDL(opts(template,audio,profile,captions,hook,url=url)) as y:
         info=y.extract_info(url,download=True); info=next((x for x in info.get("entries",[]) if x),None) if info and info.get("entries") else info
         return locate(y,info,audio)
