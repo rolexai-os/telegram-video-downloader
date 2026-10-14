@@ -40,6 +40,8 @@ MAX_QUEUE_PER_USER=max(0,int(os.getenv("MAX_QUEUE_PER_USER","0")))
 RATE_LIMIT_SECONDS=max(0,float(os.getenv("RATE_LIMIT_SECONDS","2")))
 PLAYLIST_MAX_ITEMS=max(1,int(os.getenv("PLAYLIST_MAX_ITEMS","10")))
 PROGRESS_UPDATE_SECONDS=max(2,int(os.getenv("PROGRESS_UPDATE_SECONDS","3")))
+_AUDIO_QUALITY=os.getenv("DEFAULT_AUDIO_QUALITY","192").strip()
+DEFAULT_AUDIO_QUALITY=_AUDIO_QUALITY if _AUDIO_QUALITY in {"128","192","256","320"} else "192"
 BOT_OWNER_ID=int(os.getenv("BOT_OWNER_ID","0").strip() or "0")
 ADMIN_USER_IDS={int(x.strip()) for x in os.getenv("ADMIN_USER_IDS","").split(",") if x.strip().isdigit()}
 WEBHOOK_URL=os.getenv("WEBHOOK_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()
@@ -298,7 +300,7 @@ def fmt(profile):
 def opts(template,audio=False,profile="best",captions=False,hook=None,playlist=False,url=""):
     o={"format":"bestaudio/best" if audio else fmt(profile),"outtmpl":template,"merge_output_format":"mp4","noplaylist":not playlist,"quiet":True,"no_warnings":False,"retries":5,"fragment_retries":5,"file_access_retries":3,"extractor_retries":3,"socket_timeout":30,"continuedl":True,"overwrites":False,"restrictfilenames":False,"windowsfilenames":True,"concurrent_fragment_downloads":2}
     o.update(yt_dlp_js_options())
-    if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":os.getenv("DEFAULT_AUDIO_QUALITY","192")}]
+    if audio:o["postprocessors"]=[{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":DEFAULT_AUDIO_QUALITY}]
     if captions:o.update(writesubtitles=True,writeautomaticsub=True,subtitleslangs=["all"],subtitlesformat="srt/vtt/best")
     if hook:o["progress_hooks"]=[hook]
     return o
@@ -357,11 +359,11 @@ async def start(update,context):
 async def help_cmd(update,context):
     await update.effective_message.reply_text(
         "📖 Commands\n"
-        "/start — open bot menu\n/help — command help\n"
+        "/start — open bot menu\n/help — command help\n/health — runtime diagnostics\n/platforms — supported site notes\n"
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
         "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch for supported sources\n"
         "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
-        "/settings /history /favorites /stats /version /terms\n"
+        "/settings /history [search] /favorites /stats /version /health /platforms /terms\n"
         "/admin or /panel — admin dashboard\n"
         "/cleanup /announce — admin tools\n\n"
         "Long videos have no application duration cap; media above Telegram's upload size is automatically split into parts."
@@ -385,10 +387,24 @@ async def settings_cmd(update,context):
     uid=update.effective_user.id; lang,q,a,c=settings(uid); msg=update.effective_message
     await msg.reply_text(f"⚙️ Settings\nLanguage: {lang}\nQuality: {q}\nAudio default: {'ON' if a else 'OFF'}\nCaptions: {'ON' if c else 'OFF'}",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🇬🇧 English",callback_data="set|language|en"),InlineKeyboardButton("🇮🇳 മലയാളം",callback_data="set|language|ml")],[InlineKeyboardButton("🇮🇳 हिन्दी",callback_data="set|language|hi"),InlineKeyboardButton("🇮🇳 தமிழ்",callback_data="set|language|ta")],[InlineKeyboardButton("Best",callback_data="set|quality|best"),InlineKeyboardButton("1080p",callback_data="set|quality|1080"),InlineKeyboardButton("720p",callback_data="set|quality|720")],[InlineKeyboardButton("480p",callback_data="set|quality|480"),InlineKeyboardButton("🎵 Audio",callback_data="set|audio|toggle"),InlineKeyboardButton("💬 Captions",callback_data="set|captions|toggle")]]))
 
+def history_search_query(uid, query="", limit=10):
+    """Build a parameterized, user-scoped history query for safe search."""
+    limit=max(1,min(int(limit),50))
+    query=" ".join(str(query or "").split())[:100]
+    if query:
+        pattern=f"%{query}%"
+        return ("SELECT title,url,status,size FROM history WHERE user_id=? AND (title LIKE ? OR url LIKE ? OR status LIKE ?) ORDER BY id DESC LIMIT ?", (int(uid),pattern,pattern,pattern,limit))
+    return ("SELECT title,url,status,size FROM history WHERE user_id=? ORDER BY id DESC LIMIT ?", (int(uid),limit))
+
+
 async def history_cmd(update,context):
-    uid=update.effective_user.id;c=db(); rows=c.execute("SELECT title,url,status,size FROM history WHERE user_id=? ORDER BY id DESC LIMIT 10",(uid,)).fetchall();c.close()
-    text="📚 History\n\n"+"\n".join(f"{i}. {r[0] or r[1]} — {r[2]} — {size_text(r[3])}" for i,r in enumerate(rows,1)) if rows else "📚 No download history yet."
+    uid=update.effective_user.id; query=" ".join(getattr(context,"args",[]) or [])
+    sql,params=history_search_query(uid,query)
+    c=db(); rows=c.execute(sql,params).fetchall();c.close()
+    heading=f"📚 History search: {query[:80]}\n\n" if query else "📚 History\n\n"
+    text=heading+"\n".join(f"{n}. {r[0] or r[1]} — {r[2]} — {size_text(r[3])}" for n,r in enumerate(rows,1)) if rows else ("📚 No matching history entries." if query else "📚 No download history yet.")
     await update.effective_message.reply_text(text[:4000])
+
 
 async def favorites_cmd(update,context):
     uid=update.effective_user.id;c=db(); rows=c.execute("SELECT title,url FROM favorites WHERE user_id=? ORDER BY created_at DESC LIMIT 20",(uid,)).fetchall();c.close()
