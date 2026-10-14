@@ -19,7 +19,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.21.1"
+FEATURE_VERSION = "1.22.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -122,6 +122,8 @@ async def telegram_watchdog(app):
 PUBLIC_COMMANDS = [
     BotCommand("start","Open the bot menu"),
     BotCommand("help","Show all commands"),
+    BotCommand("health","Check runtime diagnostics"),
+    BotCommand("platforms","Show supported platforms"),
     BotCommand("quality","Choose video quality"),
     BotCommand("mp3","Download audio"),
     BotCommand("subs","Download with subtitles"),
@@ -222,7 +224,7 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
     }
     if audio:
         o["postprocessors"] = [{"key":"FFmpegExtractAudio","preferredcodec":"mp3",
-                                "preferredquality":os.getenv("DEFAULT_AUDIO_QUALITY","192")}]
+                                "preferredquality":bot.DEFAULT_AUDIO_QUALITY}]
     if captions:
         o.update(writesubtitles=True, writeautomaticsub=True,
                  subtitleslangs=["all"], subtitlesformat="srt/vtt/best")
@@ -328,6 +330,52 @@ async def gated_process_one(*args, **kwargs):
         await asyncio.sleep(1)
     return await _original_process_one(*args, **kwargs)
 bot.process_one = gated_process_one
+
+async def health_cmd(update, context):
+    """Report runtime checks without exposing tokens or environment secrets."""
+    checks = []
+    checks.append(("FFmpeg", "OK" if shutil.which("ffmpeg") else "MISSING"))
+    checks.append(("FFprobe", "OK" if shutil.which("ffprobe") else "MISSING"))
+    runtime = bot.resolve_js_runtime()
+    checks.append(("YouTube JS runtime", "OK (" + ", ".join(runtime.keys()) + ")" if runtime else "MISSING"))
+    try:
+        conn = bot.db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        checks.append(("SQLite", "OK"))
+    except Exception:
+        checks.append(("SQLite", "ERROR"))
+    try:
+        bot.DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(bot.DOWNLOAD_DIR).free
+        checks.append(("Free storage", bot.size_text(free)))
+    except OSError:
+        checks.append(("Free storage", "UNAVAILABLE"))
+    async with bot.LOCK:
+        active = sum(len(jobs) for jobs in bot.JOBS.values())
+    checks.append(("Active jobs", str(active)))
+    checks.append(("Global concurrency", str(bot.MAX_CONCURRENT_DOWNLOADS)))
+    try:
+        release = Path("VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        release = FEATURE_VERSION
+    checks.append(("Release", release))
+    lines = ["🩺 Runtime health"]
+    lines.extend(f"{name}: {value}" for name, value in checks)
+    lines.append("\nNote: this local check cannot guarantee that every source is reachable.")
+    await update.effective_message.reply_text("\n".join(lines))
+
+
+async def platforms_cmd(update, context):
+    await update.effective_message.reply_text(
+        "🌐 Platform compatibility\n\n"
+        "yt-dlp-supported URLs may include YouTube/Shorts, Instagram/Reels, TikTok, Facebook, X/Twitter, Reddit and many other sites. "
+        "Compatibility depends on the exact URL and upstream site changes; this list is not a guarantee.\n\n"
+        "🔒 Authentication-required links are skipped; this bot does not use browser cookies or bypass access controls. "
+        "Spotify downloads remain disabled.\n\n"
+        "Use /analyze <URL> to inspect a specific link before downloading."
+    )
+
 
 async def stats_cmd(update, context):
     uid = update.effective_user.id
@@ -441,6 +489,7 @@ def main():
     commands = {
         "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
         "status": bot.status_cmd, "queue": queue_cmd, "pause": pause_cmd, "resume": resume_cmd,
+        "health": health_cmd, "platforms": platforms_cmd,
         "cancel": bot.cancel_cmd, "analyze": analyze_cmd, "quality": bot.quality_cmd,
         "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
         "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
@@ -450,7 +499,7 @@ def main():
     for name, fn in commands.items(): app.add_handler(bot.CommandHandler(name, fn))
     app.add_handler(bot.CallbackQueryHandler(admin_panel.panel_callback, pattern=admin_panel.PANEL_PATTERN))
     app.add_handler(bot.CallbackQueryHandler(bot.callback, pattern=r"^(menu|set|q)\|"))
-    app.add_handler(bot.MessageHandler(bot.filters.TEXT & ~bot.filters.COMMAND, bot.handle_message))
+    app.add_handler(bot.MessageHandler((bot.filters.TEXT | bot.filters.CAPTION) & ~bot.filters.COMMAND, bot.handle_message))
     # Render/Docker web services already have web.py binding the public PORT.
     # Do not let PTB start a second HTTP listener on the same port.
     # When WEBHOOK_URL is configured, use PTB's webhook *request handling*
