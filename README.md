@@ -1,5 +1,16 @@
 # Telegram Video Downloader
 
+## v1.22.0 Smart Downloader Upgrade
+
+- Added `/health` runtime diagnostics for FFmpeg, FFprobe, JavaScript runtime, SQLite, free storage, active jobs and release version. Output omits tokens and environment secrets.
+- Added `/platforms` with compatibility notes and `/analyze` guidance for checking a specific URL.
+- `/history [search words]` now searches the requesting user's title, URL and status using parameterized SQL.
+- Validated MP3 quality settings to `128`, `192`, `256` or `320` kbps; invalid values safely fall back to `192`.
+- Fixed runner handling of URLs included in Telegram media captions.
+- Added automated unit tests for queue limits, MP3 options, history-query parameterization and safe error messages.
+- Existing SQLite history, favorites, settings, `.env`, download files and administrator records are preserved. No database reset or destructive migration is introduced.
+
+
 ## v1.14.0 advanced admin control panel
 
 The Telegram-native admin panel has been restored and expanded. Admins listed in `ADMIN_USER_IDS` can use `/admin` or `/panel` to access:
@@ -216,6 +227,8 @@ YouTube videos and Shorts are supported through yt-dlp when a supported JavaScri
 | /resume | Resume queued jobs |
 | /cancel | Cancel active jobs |
 | /version | Release/version information |
+| /health | Check runtime diagnostics without exposing secrets |
+| /platforms | Show supported-platform notes |
 | /terms | Beta/legal-use notice |
 | /admin | Protected full inline admin panel |
 | /panel | Same protected inline admin panel |
@@ -246,7 +259,7 @@ MAX_QUEUE_PER_USER=0
 RATE_LIMIT_SECONDS=2
 PLAYLIST_MAX_ITEMS=10
 PROGRESS_UPDATE_SECONDS=3
-DEFAULT_AUDIO_QUALITY=192
+DEFAULT_AUDIO_QUALITY=192  # allowed: 128, 192, 256, 320 kbps for MP3
 
 # Optional
 BOT_OWNER_ID=123456789
@@ -365,9 +378,9 @@ For a free Render deployment, keep `PTB_MANAGED_WEBHOOK` unset. `web.py` owns Re
 
 ## Validation
 
-
 ~~~bash
-python -m compileall -q bot.py runner.py web.py update.py
+python -m unittest discover -s tests -v
+python -m compileall -q bot.py runner.py web.py update.py tests
 ~~~
 
 GitHub Actions also compiles the application, imports the runner, checks downloader signatures, and verifies release/configuration wiring.
