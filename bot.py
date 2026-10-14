@@ -265,6 +265,8 @@ def user_error_message(exc):
         return "⚠️ The source rejected this link, so it was skipped."
     if "429" in s or "rate limit" in s:
         return "⚠️ The source temporarily rate-limited this link. Please try again later."
+    if "ffprobe" in s and ("not found" in s or "required" in s):
+        return "⚠️ MP3 conversion needs FFmpeg and FFprobe. Install the ffmpeg package and restart the bot."
     if "404" in s or "not found" in s:
         return "⚠️ This media is unavailable or no longer exists."
     if "unsupported url" in s:
@@ -273,8 +275,6 @@ def user_error_message(exc):
         return "🚫 Spotify downloads are disabled in this release. Send a supported direct media URL instead."
     if "javascript runtime" in s or "js runtime" in s or "ejs" in s:
         return "⚠️ YouTube needs Deno or Node.js 22+ for current yt-dlp. Install a supported runtime and restart the bot."
-    if "ffprobe" in s and ("not found" in s or "required" in s):
-        return "⚠️ MP3 conversion needs FFmpeg and FFprobe. Install the ffmpeg package and restart the bot."
     if "ffmpeg" in s:
         return "⚠️ FFmpeg could not convert this media. Check free storage and that FFmpeg/FFprobe are installed."
     if any(x in s for x in ("timeout", "timed out", "temporary failure in name resolution", "name or service not known", "ssl", "tls")):
