@@ -19,7 +19,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.21.0"
+FEATURE_VERSION = "1.21.1"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -199,7 +199,8 @@ def classify_error(exc):
         (("timeout","timed out"), "Network timeout while contacting the source."),
         (("name or service not known","temporary failure in name resolution"), "DNS/network resolution failed."),
         (("ssl","tls","certificate"), "TLS/SSL connection failed."),
-        (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg is installed."),
+        (("ffprobe", "not found"), "MP3 conversion needs FFmpeg and FFprobe; install the ffmpeg package."),
+        (("ffmpeg",), "FFmpeg processing failed; verify FFmpeg/FFprobe are installed and storage is available."),
         (("unsupported url",), "This URL is not supported by yt-dlp."),
         (("javascript runtime","js runtime","ejs"), "YouTube needs Deno or Node.js 22+; install a supported runtime and update yt-dlp."),
         (("login","sign in","authentication"), "The source requires authentication; this bot does not provide session-cookie access."),
@@ -234,8 +235,9 @@ def download_options(template, audio, hook, attempt, profile="best", captions=Fa
 
 def robust_sync_download(url, audio_only=False, progress_hook=None, profile="best", captions=False):
     bot.ensure_supported_url(url)
-    suffix = "mp3" if audio_only else "%(ext)s"
-    template = str(bot.DOWNLOAD_DIR / f"%(title).180B [%(id)s].{suffix}")
+    template = bot.output_template()
+    if audio_only:
+        bot.require_mp3_tools()
     last = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
