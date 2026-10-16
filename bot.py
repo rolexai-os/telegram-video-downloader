@@ -345,7 +345,7 @@ async def download(url,audio=False,hook=None,profile="best",captions=False):
 
 
 def main_keyboard():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🎥 Download",callback_data="menu|download"),InlineKeyboardButton("⚙️ Settings",callback_data="menu|settings")],[InlineKeyboardButton("📚 History",callback_data="menu|history"),InlineKeyboardButton("⭐ Favorites",callback_data="menu|favorites")],[InlineKeyboardButton("📊 Status",callback_data="menu|status"),InlineKeyboardButton("❌ Cancel",callback_data="menu|cancel")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🎥 Download",callback_data="menu|download"),InlineKeyboardButton("⚙️ Settings",callback_data="menu|settings")],[InlineKeyboardButton("📚 History",callback_data="menu|history"),InlineKeyboardButton("⭐ Favorites",callback_data="menu|favorites")],[InlineKeyboardButton("📋 Queue",callback_data="menu|queue"),InlineKeyboardButton("❌ Cancel",callback_data="menu|cancel")],[InlineKeyboardButton("📊 Status",callback_data="menu|status")]])
 
 
 def quality_keyboard(token):
@@ -600,7 +600,7 @@ async def callback(update,context):
     q=update.callback_query;await q.answer();data=q.data
     if data.startswith("menu|"):
         a=data.split("|",1)[1]
-        return await {"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"status":status_cmd,"cancel":cancel_cmd}.get(a,lambda u,c:q.message.reply_text("Send a URL or use /quality <URL>."))(update,context)
+        return await {"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"status":status_cmd,"queue":status_cmd,"cancel":cancel_cmd}.get(a,lambda u,c:q.message.reply_text("Send a URL or use /quality <URL>."))(update,context)
     if data.startswith("set|"):
         _,field,value=data.split("|",2);uid=q.from_user.id
         if value=="toggle":
