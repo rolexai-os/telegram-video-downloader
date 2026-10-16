@@ -351,7 +351,7 @@ async def plugins_cmd(update, context):
     if errors:
         lines.append(f"Errors: {len(errors)}")
         lines.extend(f"• {name}: {message}" for name, message in errors[:5])
-    await update.effective_message.reply_text("\\n".join(lines))
+    await update.effective_message.reply_text("\n".join(lines))
 
 
 async def health_cmd(update, context):
