@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Production runner with robust yt-dlp handling and roadmap feature extensions."""
-import asyncio, logging, os, random, shutil, time
+import asyncio, logging, os, random, shutil, time, sys
 import httpx
 from pathlib import Path
 import yt_dlp
@@ -19,7 +19,7 @@ FORCE_IPV4 = os.getenv("YTDLP_FORCE_IPV4", "0").lower() in {"1","true","yes","on
 USER_AGENT = os.getenv("YTDLP_USER_AGENT", "").strip()
 DEFAULT_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36"
 PAUSED_USERS = set()
-FEATURE_VERSION = "1.22.0"
+FEATURE_VERSION = "1.23.0"
 
 INSTANCE_LOCK_FILE = Path(os.getenv("BOT_INSTANCE_LOCK", ".bot-instance.lock"))
 INSTANCE_LOCK_HANDLE = None
@@ -319,9 +319,18 @@ async def resume_cmd(update, context):
 
 async def queue_cmd(update, context):
     uid = update.effective_user.id
-    async with bot.LOCK: jobs = len(bot.JOBS.get(uid, set()))
+    async with bot.LOCK:
+        own_tasks = list(bot.JOBS.get(uid, set()))
+        total = sum(len(tasks) for tasks in bot.JOBS.values())
     state = "paused" if uid in PAUSED_USERS else "running"
-    await update.effective_message.reply_text(f"📋 Jobs: {jobs}\nQueue: {state}\nConcurrency: {bot.MAX_CONCURRENT_DOWNLOADS}")
+    names = [task.get_name() for task in own_tasks if not task.done()]
+    lines = [f"📋 Your jobs: {len(names)}", f"🌐 Global jobs: {total}", f"Queue: {state}", f"Concurrency: {bot.MAX_CONCURRENT_DOWNLOADS}"]
+    if names:
+        lines.append("\nActive task IDs:")
+        lines.extend(f"• {name[:70]}" for name in names[:10])
+    else:
+        lines.append("No active downloads.")
+    await update.effective_message.reply_text("\n".join(lines))
 
 _original_process_one = bot.process_one
 async def gated_process_one(*args, **kwargs):
@@ -330,6 +339,20 @@ async def gated_process_one(*args, **kwargs):
         await asyncio.sleep(1)
     return await _original_process_one(*args, **kwargs)
 bot.process_one = gated_process_one
+
+async def plugins_cmd(update, context):
+    state = context.application.bot_data.get("plugin_state", {"enabled": False, "loaded": [], "errors": []})
+    if not state.get("enabled"):
+        return await update.effective_message.reply_text("🧩 Plugins are disabled. Set ENABLE_PLUGINS=1 to load trusted local Python plugins, then restart.")
+    loaded = state.get("loaded", [])
+    errors = state.get("errors", [])
+    lines = ["🧩 Plugin status", f"Loaded: {len(loaded)}"]
+    lines.extend(f"• {name}" for name in loaded)
+    if errors:
+        lines.append(f"Errors: {len(errors)}")
+        lines.extend(f"• {name}: {message}" for name, message in errors[:5])
+    await update.effective_message.reply_text("\\n".join(lines))
+
 
 async def health_cmd(update, context):
     """Report runtime checks without exposing tokens or environment secrets."""
@@ -489,7 +512,7 @@ def main():
     commands = {
         "start": bot.start, "help": bot.help_cmd, "terms": bot.terms_cmd,
         "status": bot.status_cmd, "queue": queue_cmd, "pause": pause_cmd, "resume": resume_cmd,
-        "health": health_cmd, "platforms": platforms_cmd,
+        "health": health_cmd, "platforms": platforms_cmd, "plugins": plugins_cmd,
         "cancel": bot.cancel_cmd, "analyze": analyze_cmd, "quality": bot.quality_cmd,
         "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
         "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
@@ -500,6 +523,11 @@ def main():
     app.add_handler(bot.CallbackQueryHandler(admin_panel.panel_callback, pattern=admin_panel.PANEL_PATTERN))
     app.add_handler(bot.CallbackQueryHandler(bot.callback, pattern=r"^(menu|set|q)\|"))
     app.add_handler(bot.MessageHandler((bot.filters.TEXT | bot.filters.CAPTION) & ~bot.filters.COMMAND, bot.handle_message))
+    from plugin_manager import load_plugins
+    app.bot_data["plugin_state"] = load_plugins(
+        app, bot, sys.modules[__name__],
+        enabled=os.getenv("ENABLE_PLUGINS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    )
     # Render/Docker web services already have web.py binding the public PORT.
     # Do not let PTB start a second HTTP listener on the same port.
     # When WEBHOOK_URL is configured, use PTB's webhook *request handling*
