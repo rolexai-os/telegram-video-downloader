@@ -1,5 +1,15 @@
 # Telegram Video Downloader
 
+## v1.23.0 Smart Queue & Plugin Upgrade
+
+- Added an opt-in local Python plugin loader. Plugins remain disabled by default and are loaded only when `ENABLE_PLUGINS=1`; failures are isolated and shown by `/plugins`.
+- Added a reviewed example plugin under `plugins/example_plugin.py` and plugin security documentation.
+- Expanded `/queue` with per-user and global active task counts, queue pause state, concurrency, and named active task IDs.
+- Named single-link and playlist tasks so queue status is more actionable.
+- Preserved existing interactive quality/settings menus, MP3/subtitle actions, bounded playlist extraction, diagnostics, searchable user-scoped history, rate limiting and privacy restrictions.
+- Added regression tests for plugin opt-in/discovery and queue/plugin command wiring.
+- No database schema changes, reset, or destructive file cleanup are introduced. Existing history, favorites, settings, `.env`, downloads and administrator records are preserved.
+
 ## v1.22.0 Smart Downloader Upgrade
 
 - Added `/health` runtime diagnostics for FFmpeg, FFprobe, JavaScript runtime, SQLite, free storage, active jobs and release version. Output omits tokens and environment secrets.
@@ -229,6 +239,7 @@ YouTube videos and Shorts are supported through yt-dlp when a supported JavaScri
 | /version | Release/version information |
 | /health | Check runtime diagnostics without exposing secrets |
 | /platforms | Show supported-platform notes |
+| /plugins | Show optional local plugin status |
 | /terms | Beta/legal-use notice |
 | /admin | Protected full inline admin panel |
 | /panel | Same protected inline admin panel |
@@ -260,6 +271,7 @@ RATE_LIMIT_SECONDS=2
 PLAYLIST_MAX_ITEMS=10
 PROGRESS_UPDATE_SECONDS=3
 DEFAULT_AUDIO_QUALITY=192  # allowed: 128, 192, 256, 320 kbps for MP3
+ENABLE_PLUGINS=0  # set to 1 only for reviewed local Python plugins
 
 # Optional
 BOT_OWNER_ID=123456789
@@ -380,7 +392,7 @@ For a free Render deployment, keep `PTB_MANAGED_WEBHOOK` unset. `web.py` owns Re
 
 ~~~bash
 python -m unittest discover -s tests -v
-python -m compileall -q bot.py runner.py web.py update.py tests
+python -m compileall -q bot.py runner.py plugin_manager.py web.py update.py tests
 ~~~
 
 GitHub Actions also compiles the application, imports the runner, checks downloader signatures, and verifies release/configuration wiring.
