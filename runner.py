@@ -124,6 +124,7 @@ PUBLIC_COMMANDS = [
     BotCommand("help","Show all commands"),
     BotCommand("health","Check runtime diagnostics"),
     BotCommand("platforms","Show supported platforms"),
+    BotCommand("plugins","Show optional plugin status"),
     BotCommand("quality","Choose video quality"),
     BotCommand("mp3","Download audio"),
     BotCommand("subs","Download with subtitles"),
