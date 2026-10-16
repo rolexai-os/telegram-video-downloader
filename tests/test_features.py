@@ -64,5 +64,43 @@ class QueueLimitTests(unittest.IsolatedAsyncioTestCase):
             bot.MAX_QUEUE_PER_USER, bot.JOBS, bot.LOCK = old_limit, old_jobs, old_lock
 
 
+class PluginManagerTests(unittest.TestCase):
+    def test_plugins_are_disabled_by_default(self):
+        from plugin_manager import load_plugins
+        state = load_plugins(object(), bot, runner, enabled=False, plugin_dir="missing-plugins")
+        self.assertEqual(state, {"enabled": False, "loaded": [], "errors": []})
+
+    def test_discovery_ignores_private_and_non_python_files(self):
+        import tempfile
+        from pathlib import Path
+        from plugin_manager import discover_plugins
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "one.py").write_text("def register(app, bot_module, runner_module): pass")
+            (root / "_private.py").write_text("not valid python!")
+            (root / "notes.txt").write_text("not a plugin")
+            self.assertEqual([p.name for p in discover_plugins(root)], ["one.py"])
+
+    def test_loader_isolates_a_failing_plugin(self):
+        import tempfile
+        from pathlib import Path
+        from plugin_manager import load_plugins
+        class FakeApp:
+            pass
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "good.py").write_text("def register(app, bot_module, runner_module): app.loaded = True")
+            (root / "bad.py").write_text("def register(app, bot_module, runner_module): raise RuntimeError('expected test failure')")
+            app = FakeApp()
+            state = load_plugins(app, bot, runner, enabled=True, plugin_dir=root)
+            self.assertTrue(app.loaded)
+            self.assertEqual(state["loaded"], ["good"])
+            self.assertEqual(state["errors"][0][0], "bad")
+
+    def test_queue_and_plugins_commands_are_available(self):
+        self.assertTrue(callable(runner.queue_cmd))
+        self.assertTrue(callable(runner.plugins_cmd))
+
+
 if __name__ == "__main__":
     unittest.main()
