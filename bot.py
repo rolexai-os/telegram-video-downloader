@@ -363,7 +363,7 @@ async def help_cmd(update,context):
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
         "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch for supported sources\n"
         "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
-        "/settings /history [search] /favorites /stats /version /health /platforms /terms\n"
+        "/settings /history [search] /favorites /stats /version /health /platforms /plugins /terms\n"
         "/admin or /panel — admin dashboard\n"
         "/cleanup /announce — admin tools\n\n"
         "Long videos have no application duration cap; media above Telegram's upload size is automatically split into parts."
@@ -590,7 +590,7 @@ async def playlist_cmd(update,context):
         if not entries:raise RuntimeError("No entries found")
         for e in entries:
             u=e.get("webpage_url") or e.get("url")
-            if u:asyncio.create_task(process_one(update.effective_message,context,uid,u))
+            if u:asyncio.create_task(process_one(update.effective_message,context,uid,u),name=f"playlist-{uid}-{len(entries)}")
         await update.effective_message.reply_text(f"📥 Queued {len(entries)} playlist item(s).")
     except Exception as exc:
         logger.exception("playlist extraction failed")
@@ -626,7 +626,7 @@ async def handle_message(update,context):
     if not urls:return await m.reply_text("❌ Send one or more supported media URLs.")
     if MAX_LINKS_PER_MESSAGE and len(urls)>MAX_LINKS_PER_MESSAGE:return await m.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per message.")
     _,profile,audio,captions=settings(uid)
-    for u in urls:asyncio.create_task(process_one(m,context,uid,u,bool(audio),profile,bool(captions)))
+    for index,u in enumerate(urls,1):asyncio.create_task(process_one(m,context,uid,u,bool(audio),profile,bool(captions)),name=f"download-{uid}-{index}")
     await m.reply_text(f"📥 Queued {len(urls)} link(s). Use /status or /cancel.")
 
 if __name__=="__main__":main()
