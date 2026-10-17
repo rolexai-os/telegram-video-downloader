@@ -23,6 +23,12 @@ class DownloaderFeatureTests(unittest.TestCase):
         self.assertEqual(params[0], 42)
         self.assertEqual(params[1], "%x' OR 1=1 --%")
 
+    def test_latest_failed_history_query_is_user_scoped(self):
+        sql, params = bot.history_latest_failed_query(314)
+        self.assertIn("user_id=?", sql)
+        self.assertIn("status='failed'", sql)
+        self.assertEqual(params, (314,))
+
     def test_history_limit_is_bounded(self):
         sql, params = bot.history_search_query(7, "", 999)
         self.assertTrue(sql.endswith("LIMIT ?"))
@@ -42,9 +48,10 @@ class DownloaderFeatureTests(unittest.TestCase):
             options = runner.download_options("sample.%(ext)s", True, None, 1)
         self.assertEqual(options["postprocessors"][0]["preferredquality"], "256")
 
-    def test_diagnostics_handlers_are_callable(self):
+    def test_diagnostics_and_retry_handlers_are_callable(self):
         self.assertTrue(callable(runner.health_cmd))
         self.assertTrue(callable(runner.platforms_cmd))
+        self.assertTrue(callable(bot.retry_cmd))
 
 
 class InputValidationTests(unittest.TestCase):
