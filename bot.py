@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import sqlite3
 import socket
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -367,8 +368,32 @@ def sync_download(url,audio=False,hook=None,profile="best",captions=False):
         return locate(y,info,audio)
 
 
+class DownloadCancelled(Exception):
+    """Internal signal used to stop yt-dlp from its next progress callback."""
+
+
+def cancellation_aware_hook(cancel_event, hook=None):
+    """Wrap a yt-dlp hook so a cancelled asyncio task can stop its worker thread."""
+    def wrapped(info):
+        if cancel_event.is_set():
+            raise DownloadCancelled("Download cancelled by user")
+        if hook:
+            return hook(info)
+        return None
+    return wrapped
+
+
 async def download(url,audio=False,hook=None,profile="best",captions=False):
-    async with GLOBAL_SEMAPHORE:return await asyncio.to_thread(sync_download,url,audio,hook,profile,captions)
+    cancel_event = threading.Event()
+    wrapped_hook = cancellation_aware_hook(cancel_event, hook)
+    try:
+        async with GLOBAL_SEMAPHORE:
+            return await asyncio.to_thread(sync_download,url,audio,wrapped_hook,profile,captions)
+    except asyncio.CancelledError:
+        # Cancelling asyncio.to_thread cannot stop its OS thread directly. The event
+        # makes the next yt-dlp progress callback abort extraction/download cleanly.
+        cancel_event.set()
+        raise
 
 
 def main_keyboard():
@@ -591,6 +616,7 @@ async def process_one(message,context,uid,url,audio=False,profile="best",caption
         history(uid,url,"","cancelled");audit_event(message.from_user,"download_cancelled",url)
         try:await status.edit_text("🛑 Job cancelled.")
         except Exception:pass
+        raise
     except Exception as exc:
         history(uid,url,"","failed");audit_event(message.from_user,"download_failed",url,user_error_message(exc));logger.exception("download failed")
         try:await status.edit_text(user_error_message(exc))
@@ -641,7 +667,11 @@ async def quality_callback(update,context):
         await q.edit_message_text("📤 Uploading…")
         await send_media(q.message,file_path,audio,f"✅ {file_path.stem}")
         history(uid,url,file_path.stem,"success",n);favorite(uid,url,file_path.stem);audit_event(q.from_user,"download_success",url,file_path.stem)
-    except asyncio.CancelledError:history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url);await q.edit_message_text("🛑 Cancelled.")
+    except asyncio.CancelledError:
+        history(uid,url,"","cancelled");audit_event(q.from_user,"download_cancelled",url)
+        try: await q.edit_message_text("🛑 Cancelled.")
+        except Exception: pass
+        raise
     except Exception as exc:
         history(uid,url,"","failed");audit_event(q.from_user,"download_failed",url,user_error_message(exc));logger.exception("quality download failed")
         await q.edit_message_text(user_error_message(exc))
