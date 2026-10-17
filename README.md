@@ -5,7 +5,8 @@
 - Added `/cancel <job_id>` to cancel one of your own downloads; `/cancel` without an ID still requests cancellation of all your jobs.
 - `/queue` now displays short, unique job IDs that can be copied into `/cancel`.
 - Added strict allow-list validation for language, video quality, audio, and caption settings before SQLite updates.
-- Added regression tests for job-ID matching, ambiguous cancellation IDs, generated task IDs, and settings validation.
+- Added `/retry` and a main-menu retry button for the requesting user's most recent failed URL, using a parameterized, user-scoped history query.
+- Added regression tests for job-ID matching, ambiguous cancellation IDs, generated task IDs, settings validation, and retry-history isolation.
 - Playlist enhancements remain scheduled for v1.25.0; existing playlist limits and behavior are unchanged.
 - Plugins remain disabled unless explicitly enabled with `ENABLE_PLUGINS=1`.
 - No database migration, database reset, download cleanup, or `.env` rewrite is introduced. Existing user data and configuration are preserved.
@@ -239,6 +240,7 @@ YouTube videos and Shorts are supported through yt-dlp when a supported JavaScri
 | /playlist <URL> | Queue an authorized playlist/batch, for supported sources |
 | /settings | User preferences |
 | /history [search] | Recent/searchable history |
+| /retry | Retry your latest failed download |
 | /favorites | Saved URLs |
 | /stats | Personal usage statistics |
 | /status | Active jobs/resources |
