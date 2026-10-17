@@ -236,9 +236,36 @@ def settings(uid):
     touch(uid); c=db(); r=c.execute("SELECT language,quality,audio,captions FROM users WHERE user_id=?",(uid,)).fetchone(); c.close(); return r or ("en","best",0,0)
 
 
-def set_setting(uid,field,value):
-    if field not in {"language","quality","audio","captions"}: return
-    touch(uid); c=db(); c.execute(f"UPDATE users SET {field}=? WHERE user_id=?",(value,uid)); c.commit(); c.close()
+def validate_setting_value(field, value):
+    """Validate user preferences before writing them to SQLite."""
+    if field == "language":
+        normalized = str(value).strip().lower()
+        return normalized if normalized in {"en", "ml", "hi", "ta"} else None
+    if field == "quality":
+        normalized = str(value).strip().lower()
+        return normalized if normalized in {"best", "1080", "720", "480"} else None
+    if field in {"audio", "captions"}:
+        if isinstance(value, bool):
+            return int(value)
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "on"}:
+            return 1
+        if normalized in {"0", "false", "off"}:
+            return 0
+    return None
+
+
+def set_setting(uid, field, value):
+    """Persist only allow-listed settings and values; return False on invalid input."""
+    normalized = validate_setting_value(field, value)
+    if normalized is None:
+        return False
+    touch(uid)
+    conn = db()
+    conn.execute(f"UPDATE users SET {field}=? WHERE user_id=?", (normalized, uid))
+    conn.commit()
+    conn.close()
+    return True
 
 
 def history(uid,url,title,status,size=0):
@@ -377,11 +404,40 @@ async def status_cmd(update,context):
     async with LOCK: own=len(JOBS.get(uid,set())); total=sum(len(x) for x in JOBS.values())
     await update.effective_message.reply_text(f"📊 Your jobs: {own}\nGlobal jobs: {total}\nConcurrent slots: {MAX_CONCURRENT_DOWNLOADS}")
 
+def select_jobs_for_cancel(tasks, job_id=""):
+    """Select a user's task by full name or short unique suffix; empty ID means all."""
+    requested = str(job_id or "").strip()
+    if not requested:
+        return list(tasks)
+    matches = [
+        task for task in tasks
+        if task.get_name() == requested or task.get_name().rsplit("-", 1)[-1] == requested
+    ]
+    return matches if len(matches) == 1 else []
+
+
+def task_name(prefix, uid):
+    """Create a readable, unique task name whose final 8 hex chars are its short ID."""
+    return f"{prefix}-{int(uid)}-{uuid.uuid4().hex[:8]}"
+
+
 async def cancel_cmd(update,context):
     uid=update.effective_user.id
-    async with LOCK: jobs=list(JOBS.get(uid,set()))
-    for t in jobs:t.cancel()
-    await update.effective_message.reply_text(f"🛑 Cancellation requested for {len(jobs)} job(s).")
+    requested=" ".join(getattr(context, "args", []) or []).strip()
+    async with LOCK:
+        own_tasks=list(JOBS.get(uid,set()))
+    jobs=select_jobs_for_cancel(own_tasks, requested)
+    if requested and not jobs:
+        await update.effective_message.reply_text("❌ No unique matching job found. Use /queue to copy a job ID, or /cancel to cancel all your jobs.")
+        return
+    for task in jobs:
+        if task is not asyncio.current_task():
+            task.cancel()
+    if requested:
+        label=requested[:80]
+        await update.effective_message.reply_text(f"🛑 Cancellation requested for job {label}.")
+    else:
+        await update.effective_message.reply_text(f"🛑 Cancellation requested for {len(jobs)} job(s).")
 
 async def settings_cmd(update,context):
     uid=update.effective_user.id; lang,q,a,c=settings(uid); msg=update.effective_message
@@ -565,14 +621,14 @@ async def mp3_cmd(update,context):
     urls=[clean_url(x) for x in URL_RE.findall(" ".join(context.args))]
     if not urls:return await update.effective_message.reply_text("Usage: /mp3 <URL>")
     uid=update.effective_user.id
-    for u in urls:asyncio.create_task(process_one(update.effective_message,context,uid,u,True))
+    for u in urls:asyncio.create_task(process_one(update.effective_message,context,uid,u,True), name=task_name("mp3", uid))
     await update.effective_message.reply_text(f"🎵 Queued {len(urls)} MP3 job(s).")
 
 async def subs_cmd(update,context):
     urls=[clean_url(x) for x in URL_RE.findall(" ".join(context.args))]
     if not urls:return await update.effective_message.reply_text("Usage: /subs <URL>")
     uid=update.effective_user.id
-    for u in urls:asyncio.create_task(process_one(update.effective_message,context,uid,u,False,"best",True))
+    for u in urls:asyncio.create_task(process_one(update.effective_message,context,uid,u,False,"best",True), name=task_name("subs", uid))
     await update.effective_message.reply_text(f"💬 Queued {len(urls)} caption-enabled job(s).")
 
 async def playlist_cmd(update,context):
@@ -590,7 +646,7 @@ async def playlist_cmd(update,context):
         if not entries:raise RuntimeError("No entries found")
         for e in entries:
             u=e.get("webpage_url") or e.get("url")
-            if u:asyncio.create_task(process_one(update.effective_message,context,uid,u),name=f"playlist-{uid}-{len(entries)}")
+            if u:asyncio.create_task(process_one(update.effective_message,context,uid,u),name=task_name("playlist", uid))
         await update.effective_message.reply_text(f"📥 Queued {len(entries)} playlist item(s).")
     except Exception as exc:
         logger.exception("playlist extraction failed")
@@ -605,7 +661,10 @@ async def callback(update,context):
         _,field,value=data.split("|",2);uid=q.from_user.id
         if value=="toggle":
             s=settings(uid);value=not bool(s[2] if field=="audio" else s[3])
-        set_setting(uid,field,value);await q.edit_message_text("✅ Setting updated.");return await settings_cmd(update,context)
+        if not set_setting(uid,field,value):
+            return await q.edit_message_text("❌ Invalid setting value. Open /settings and choose one of the listed options.")
+        await q.edit_message_text("✅ Setting updated.")
+        return await settings_cmd(update,context)
     if data.startswith("q|"):return await quality_callback(update,context)
 
 
@@ -626,7 +685,11 @@ async def handle_message(update,context):
     if not urls:return await m.reply_text("❌ Send one or more supported media URLs.")
     if MAX_LINKS_PER_MESSAGE and len(urls)>MAX_LINKS_PER_MESSAGE:return await m.reply_text(f"❌ Maximum {MAX_LINKS_PER_MESSAGE} links per message.")
     _,profile,audio,captions=settings(uid)
-    for index,u in enumerate(urls,1):asyncio.create_task(process_one(m,context,uid,u,bool(audio),profile,bool(captions)),name=f"download-{uid}-{index}")
+    for u in urls:
+        asyncio.create_task(
+            process_one(m,context,uid,u,bool(audio),profile,bool(captions)),
+            name=task_name("download", uid),
+        )
     await m.reply_text(f"📥 Queued {len(urls)} link(s). Use /status or /cancel.")
 
 if __name__=="__main__":main()
