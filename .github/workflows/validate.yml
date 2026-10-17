@@ -44,6 +44,7 @@ jobs:
           assert callable(bot.history_search_query)
           assert callable(bot.validate_setting_value)
           assert callable(bot.select_jobs_for_cancel)
+          assert callable(bot.cancellation_aware_hook)
           assert callable(bot.retry_cmd)
           assert callable(bot.history_latest_failed_query)
           assert bot.validate_setting_value("quality", "1080") == "1080"
@@ -138,6 +139,7 @@ jobs:
           grep -q "history_search_query" bot.py
           grep -q "validate_setting_value" bot.py
           grep -q "select_jobs_for_cancel" bot.py
+          grep -q "cancellation_aware_hook" bot.py
           grep -q "history_latest_failed_query" bot.py
           grep -q 'BotCommand("retry"' runner.py
           grep -q "job_id" README.md
