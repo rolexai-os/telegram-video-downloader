@@ -1,5 +1,15 @@
 # Telegram Video Downloader
 
+## v1.24.0 Reliability & Control Upgrade
+
+- Added `/cancel <job_id>` to cancel one of your own downloads; `/cancel` without an ID still requests cancellation of all your jobs.
+- `/queue` now displays short, unique job IDs that can be copied into `/cancel`.
+- Added strict allow-list validation for language, video quality, audio, and caption settings before SQLite updates.
+- Added regression tests for job-ID matching, ambiguous cancellation IDs, generated task IDs, and settings validation.
+- Playlist enhancements remain scheduled for v1.25.0; existing playlist limits and behavior are unchanged.
+- Plugins remain disabled unless explicitly enabled with `ENABLE_PLUGINS=1`.
+- No database migration, database reset, download cleanup, or `.env` rewrite is introduced. Existing user data and configuration are preserved.
+
 ## v1.23.0 Smart Queue & Plugin Upgrade
 
 - Added an opt-in local Python plugin loader. Plugins remain disabled by default and are loaded only when `ENABLE_PLUGINS=1`; failures are isolated and shown by `/plugins`.
