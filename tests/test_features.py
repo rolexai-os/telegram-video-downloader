@@ -1,4 +1,4 @@
-"""Regression tests for v1.22.0 features; no network or real downloads required."""
+"""Regression tests for downloader features; no network or real downloads required."""
 import asyncio
 import unittest
 from unittest.mock import patch
@@ -45,6 +45,41 @@ class DownloaderFeatureTests(unittest.TestCase):
     def test_diagnostics_handlers_are_callable(self):
         self.assertTrue(callable(runner.health_cmd))
         self.assertTrue(callable(runner.platforms_cmd))
+
+
+class InputValidationTests(unittest.TestCase):
+    def test_settings_values_are_allow_listed(self):
+        self.assertEqual(bot.validate_setting_value("language", "ml"), "ml")
+        self.assertIsNone(bot.validate_setting_value("language", "not-a-language"))
+        self.assertEqual(bot.validate_setting_value("quality", "1080"), "1080")
+        self.assertIsNone(bot.validate_setting_value("quality", "best-and-secret"))
+        self.assertEqual(bot.validate_setting_value("audio", True), 1)
+        self.assertEqual(bot.validate_setting_value("captions", "off"), 0)
+        self.assertIsNone(bot.validate_setting_value("unknown", "anything"))
+
+    def test_cancel_selection_matches_only_one_job(self):
+        class FakeTask:
+            def __init__(self, name):
+                self.name = name
+            def get_name(self):
+                return self.name
+
+        tasks = [
+            FakeTask("download-42-a1b2c3d4"),
+            FakeTask("download-42-e5f6a7b8"),
+        ]
+        self.assertEqual(bot.select_jobs_for_cancel(tasks, "a1b2c3d4"), [tasks[0]])
+        self.assertEqual(bot.select_jobs_for_cancel(tasks, "missing"), [])
+        self.assertEqual(bot.select_jobs_for_cancel(tasks, ""), tasks)
+        ambiguous = [FakeTask("one-sameid"), FakeTask("two-sameid")]
+        self.assertEqual(bot.select_jobs_for_cancel(ambiguous, "sameid"), [])
+
+    def test_task_names_include_unique_short_ids(self):
+        first = bot.task_name("download", 123)
+        second = bot.task_name("download", 123)
+        self.assertTrue(first.startswith("download-123-"))
+        self.assertEqual(len(first.rsplit("-", 1)[-1]), 8)
+        self.assertNotEqual(first, second)
 
 
 class QueueLimitTests(unittest.IsolatedAsyncioTestCase):
