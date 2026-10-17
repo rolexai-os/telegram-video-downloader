@@ -42,6 +42,10 @@ jobs:
           assert bot.output_template().endswith("%(ext)s")
           assert bot.DEFAULT_AUDIO_QUALITY in {"128", "192", "256", "320"}
           assert callable(bot.history_search_query)
+          assert callable(bot.validate_setting_value)
+          assert callable(bot.select_jobs_for_cancel)
+          assert bot.validate_setting_value("quality", "1080") == "1080"
+          assert bot.validate_setting_value("quality", "invalid") is None
           assert callable(runner.health_cmd) and callable(runner.platforms_cmd)
           assert callable(runner.plugins_cmd)
           from plugin_manager import load_plugins, discover_plugins
@@ -122,7 +126,7 @@ jobs:
           grep -q 'PLAYLIST_MAX_ITEMS' .env.example
           grep -q 'PROGRESS_UPDATE_SECONDS' .env.example
           grep -q 'DEFAULT_AUDIO_QUALITY' .env.example
-          test "$(cat VERSION)" = "1.23.0"
+          test "$(cat VERSION)" = "1.24.0"
           grep -q "ENABLE_PLUGINS" .env.example
           grep -q "plugin_manager" runner.py
           test -f plugins/example_plugin.py
@@ -130,5 +134,8 @@ jobs:
           grep -q "async def health_cmd" runner.py
           grep -q "async def platforms_cmd" runner.py
           grep -q "history_search_query" bot.py
+          grep -q "validate_setting_value" bot.py
+          grep -q "select_jobs_for_cancel" bot.py
+          grep -q "job_id" README.md
           test -f tests/test_features.py
           test -f admin_panel.py
