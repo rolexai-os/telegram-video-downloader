@@ -3,7 +3,7 @@
 ## v1.24.0 Reliability & Control Upgrade
 
 - Added `/cancel <job_id>` to cancel one of your own downloads; `/cancel` without an ID still requests cancellation of all your jobs.
-- `/queue` now displays short, unique job IDs that can be copied into `/cancel`.
+- `/queue` now displays short, unique job IDs that can be copied into `/cancel`; per-job cancellation propagates through cleanup and signals yt-dlp workers to stop on their next progress callback.
 - Added strict allow-list validation for language, video quality, audio, and caption settings before SQLite updates.
 - Added `/retry` and a main-menu retry button for the requesting user's most recent failed URL, using a parameterized, user-scoped history query.
 - Added regression tests for job-ID matching, ambiguous cancellation IDs, generated task IDs, settings validation, and retry-history isolation.
