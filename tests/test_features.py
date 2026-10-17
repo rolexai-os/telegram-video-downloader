@@ -81,6 +81,17 @@ class InputValidationTests(unittest.TestCase):
         ambiguous = [FakeTask("one-sameid"), FakeTask("two-sameid")]
         self.assertEqual(bot.select_jobs_for_cancel(ambiguous, "sameid"), [])
 
+    def test_cancellation_aware_hook_stops_worker_on_next_progress(self):
+        import threading
+        event = threading.Event()
+        seen = []
+        hook = bot.cancellation_aware_hook(event, lambda info: seen.append(info))
+        hook({"status": "downloading"})
+        self.assertEqual(len(seen), 1)
+        event.set()
+        with self.assertRaises(bot.DownloadCancelled):
+            hook({"status": "downloading"})
+
     def test_task_names_include_unique_short_ids(self):
         first = bot.task_name("download", 123)
         second = bot.task_name("download", 123)
