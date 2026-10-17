@@ -134,7 +134,7 @@ PUBLIC_COMMANDS = [
     BotCommand("queue","Show queue state"),
     BotCommand("pause","Pause your queue"),
     BotCommand("resume","Resume your queue"),
-    BotCommand("cancel","Cancel your jobs"),
+    BotCommand("cancel","Cancel a job ID or all your jobs"),
     BotCommand("settings","Open settings"),
     BotCommand("history","Show download history"),
     BotCommand("favorites","Show favorites"),
@@ -327,8 +327,13 @@ async def queue_cmd(update, context):
     names = [task.get_name() for task in own_tasks if not task.done()]
     lines = [f"📋 Your jobs: {len(names)}", f"🌐 Global jobs: {total}", f"Queue: {state}", f"Concurrency: {bot.MAX_CONCURRENT_DOWNLOADS}"]
     if names:
-        lines.append("\nActive task IDs:")
-        lines.extend(f"• {name[:70]}" for name in names[:10])
+        lines.append("\nJob IDs (use /cancel <ID> to cancel one):")
+        lines.extend(
+            f"• {name.rsplit('-', 1)[-1]} — {name[:55]}"
+            for name in names[:10]
+        )
+        if len(names) > 10:
+            lines.append(f"…and {len(names) - 10} more. Use /cancel without an ID to cancel all.")
     else:
         lines.append("No active downloads.")
     await update.effective_message.reply_text("\n".join(lines))
