@@ -389,7 +389,7 @@ async def help_cmd(update,context):
         "/start — open bot menu\n/help — command help\n/health — runtime diagnostics\n/platforms — supported site notes\n"
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
         "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch for supported sources\n"
-        "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel\n"
+        "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel [job_id] — cancel one job or all your jobs\n"
         "/settings /history [search] /favorites /stats /version /health /platforms /plugins /terms\n"
         "/admin or /panel — admin dashboard\n"
         "/cleanup /announce — admin tools\n\n"
