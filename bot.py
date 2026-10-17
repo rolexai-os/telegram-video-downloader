@@ -372,7 +372,7 @@ async def download(url,audio=False,hook=None,profile="best",captions=False):
 
 
 def main_keyboard():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🎥 Download",callback_data="menu|download"),InlineKeyboardButton("⚙️ Settings",callback_data="menu|settings")],[InlineKeyboardButton("📚 History",callback_data="menu|history"),InlineKeyboardButton("⭐ Favorites",callback_data="menu|favorites")],[InlineKeyboardButton("📋 Queue",callback_data="menu|queue"),InlineKeyboardButton("❌ Cancel",callback_data="menu|cancel")],[InlineKeyboardButton("📊 Status",callback_data="menu|status")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🎥 Download",callback_data="menu|download"),InlineKeyboardButton("⚙️ Settings",callback_data="menu|settings")],[InlineKeyboardButton("📚 History",callback_data="menu|history"),InlineKeyboardButton("⭐ Favorites",callback_data="menu|favorites")],[InlineKeyboardButton("📋 Queue",callback_data="menu|queue"),InlineKeyboardButton("❌ Cancel",callback_data="menu|cancel")],[InlineKeyboardButton("📊 Status",callback_data="menu|status"),InlineKeyboardButton("🔁 Retry",callback_data="menu|retry")]])
 
 
 def quality_keyboard(token):
@@ -390,7 +390,7 @@ async def help_cmd(update,context):
         "/quality <URL> — choose quality\n/mp3 <URL> — extract audio\n"
         "/subs <URL> — download with subtitles\n/playlist <URL> — playlist/batch for supported sources\n"
         "/analyze <URL> — inspect formats\n/status /queue /pause /resume /cancel [job_id] — cancel one job or all your jobs\n"
-        "/settings /history [search] /favorites /stats /version /health /platforms /plugins /terms\n"
+        "/settings /history [search] /retry /favorites /stats /version /health /platforms /plugins /terms\n"
         "/admin or /panel — admin dashboard\n"
         "/cleanup /announce — admin tools\n\n"
         "Long videos have no application duration cap; media above Telegram's upload size is automatically split into parts."
@@ -443,6 +443,22 @@ async def settings_cmd(update,context):
     uid=update.effective_user.id; lang,q,a,c=settings(uid); msg=update.effective_message
     await msg.reply_text(f"⚙️ Settings\nLanguage: {lang}\nQuality: {q}\nAudio default: {'ON' if a else 'OFF'}\nCaptions: {'ON' if c else 'OFF'}",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🇬🇧 English",callback_data="set|language|en"),InlineKeyboardButton("🇮🇳 മലയാളം",callback_data="set|language|ml")],[InlineKeyboardButton("🇮🇳 हिन्दी",callback_data="set|language|hi"),InlineKeyboardButton("🇮🇳 தமிழ்",callback_data="set|language|ta")],[InlineKeyboardButton("Best",callback_data="set|quality|best"),InlineKeyboardButton("1080p",callback_data="set|quality|1080"),InlineKeyboardButton("720p",callback_data="set|quality|720")],[InlineKeyboardButton("480p",callback_data="set|quality|480"),InlineKeyboardButton("🎵 Audio",callback_data="set|audio|toggle"),InlineKeyboardButton("💬 Captions",callback_data="set|captions|toggle")]]))
 
+def history_latest_failed_query(uid):
+    """Build a parameterized query for the requesting user's latest failed URL."""
+    return (
+        "SELECT url FROM history WHERE user_id=? AND status='failed' AND url<>'' ORDER BY id DESC LIMIT 1",
+        (int(uid),),
+    )
+
+
+def last_failed_url(uid):
+    sql, params = history_latest_failed_query(uid)
+    conn = db()
+    row = conn.execute(sql, params).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
 def history_search_query(uid, query="", limit=10):
     """Build a parameterized, user-scoped history query for safe search."""
     limit=max(1,min(int(limit),50))
@@ -451,6 +467,24 @@ def history_search_query(uid, query="", limit=10):
         pattern=f"%{query}%"
         return ("SELECT title,url,status,size FROM history WHERE user_id=? AND (title LIKE ? OR url LIKE ? OR status LIKE ?) ORDER BY id DESC LIMIT ?", (int(uid),pattern,pattern,pattern,limit))
     return ("SELECT title,url,status,size FROM history WHERE user_id=? ORDER BY id DESC LIMIT ?", (int(uid),limit))
+
+
+async def retry_cmd(update, context):
+    """Retry only the requesting user's most recent failed URL."""
+    uid = update.effective_user.id
+    message = update.effective_message
+    url = last_failed_url(uid)
+    if not url:
+        return await message.reply_text("🔁 No failed download is available to retry yet.")
+    try:
+        ensure_supported_url(url)
+    except Exception as exc:
+        return await message.reply_text(user_error_message(exc))
+    asyncio.create_task(
+        process_one(message, context, uid, url),
+        name=task_name("retry", uid),
+    )
+    await message.reply_text("🔁 Retrying your most recent failed download. Use /queue to track it.")
 
 
 async def history_cmd(update,context):
@@ -656,7 +690,7 @@ async def callback(update,context):
     q=update.callback_query;await q.answer();data=q.data
     if data.startswith("menu|"):
         a=data.split("|",1)[1]
-        return await {"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"status":status_cmd,"queue":status_cmd,"cancel":cancel_cmd}.get(a,lambda u,c:q.message.reply_text("Send a URL or use /quality <URL>."))(update,context)
+        return await {"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"status":status_cmd,"queue":status_cmd,"cancel":cancel_cmd,"retry":retry_cmd}.get(a,lambda u,c:q.message.reply_text("Send a URL or use /quality <URL>."))(update,context)
     if data.startswith("set|"):
         _,field,value=data.split("|",2);uid=q.from_user.id
         if value=="toggle":
@@ -673,7 +707,7 @@ def main():
     db()
     if not shutil.which("ffmpeg"):logger.warning("FFmpeg not found")
     app=Application.builder().token(BOT_TOKEN).build()
-    for name,fn in {"start":start,"help":help_cmd,"terms":terms_cmd,"status":status_cmd,"cancel":cancel_cmd,"quality":quality_cmd,"mp3":mp3_cmd,"subs":subs_cmd,"playlist":playlist_cmd,"settings":settings_cmd,"history":history_cmd,"favorites":favorites_cmd,"admin":admin_cmd}.items():app.add_handler(CommandHandler(name,fn))
+    for name,fn in {"start":start,"help":help_cmd,"terms":terms_cmd,"status":status_cmd,"cancel":cancel_cmd,"quality":quality_cmd,"mp3":mp3_cmd,"subs":subs_cmd,"playlist":playlist_cmd,"settings":settings_cmd,"history":history_cmd,"retry":retry_cmd,"favorites":favorites_cmd,"admin":admin_cmd}.items():app.add_handler(CommandHandler(name,fn))
     app.add_handler(CallbackQueryHandler(callback,pattern=r"^(menu|set|q)\|"));app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND,handle_message))
     if WEBHOOK_URL:app.run_webhook(listen="0.0.0.0",port=PORT,url_path="telegram",webhook_url=f"{WEBHOOK_URL.rstrip('/')}/telegram",secret_token=WEBHOOK_SECRET or None,drop_pending_updates=True,allowed_updates=Update.ALL_TYPES,max_connections=20)
     else:app.run_polling(allowed_updates=Update.ALL_TYPES,drop_pending_updates=True)
