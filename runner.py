@@ -137,6 +137,7 @@ PUBLIC_COMMANDS = [
     BotCommand("cancel","Cancel a job ID or all your jobs"),
     BotCommand("settings","Open settings"),
     BotCommand("history","Show download history"),
+    BotCommand("retry","Retry your latest failed download"),
     BotCommand("favorites","Show favorites"),
     BotCommand("stats","Show personal statistics"),
     BotCommand("version","Show bot version"),
@@ -521,7 +522,7 @@ def main():
         "health": health_cmd, "platforms": platforms_cmd, "plugins": plugins_cmd,
         "cancel": bot.cancel_cmd, "analyze": analyze_cmd, "quality": bot.quality_cmd,
         "mp3": bot.mp3_cmd, "subs": bot.subs_cmd, "playlist": bot.playlist_cmd,
-        "settings": bot.settings_cmd, "history": bot.history_cmd, "favorites": bot.favorites_cmd,
+        "settings": bot.settings_cmd, "history": bot.history_cmd, "retry": bot.retry_cmd, "favorites": bot.favorites_cmd,
         "stats": stats_cmd, "version": version_cmd, "admin": admin_panel.panel_cmd,
         "cleanup": cleanup_cmd, "announce": announce_cmd, "panel": admin_panel.panel_cmd, "admins": admins_cmd, "adminadd": adminadd_cmd, "adminremove": adminremove_cmd,
     }
